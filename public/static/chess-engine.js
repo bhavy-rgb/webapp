@@ -554,6 +554,86 @@ class ChessGame {
   isGameOver() {
     return this.status !== 'playing';
   }
+
+  // ---------- FEN import/export ----------
+  toFEN() {
+    let fen = '';
+    for (let r = 7; r >= 0; r--) {
+      let empty = 0;
+      for (let f = 0; f < 8; f++) {
+        const p = this.board[sq(r, f)];
+        if (!p) { empty++; continue; }
+        if (empty) { fen += empty; empty = 0; }
+        fen += p.color === WHITE ? p.type.toUpperCase() : p.type;
+      }
+      if (empty) fen += empty;
+      if (r > 0) fen += '/';
+    }
+    fen += ' ' + this.turn;
+    let cast = (this.castling.wK ? 'K' : '') + (this.castling.wQ ? 'Q' : '') +
+               (this.castling.bK ? 'k' : '') + (this.castling.bQ ? 'q' : '');
+    fen += ' ' + (cast || '-');
+    fen += ' ' + (this.epSquare !== null ? squareName(this.epSquare) : '-');
+    fen += ' ' + this.halfmoveClock + ' ' + this.fullmoveNumber;
+    return fen;
+  }
+
+  // Loads a FEN string. Returns true on success, false on invalid FEN.
+  loadFEN(fen) {
+    try {
+      const parts = fen.trim().split(/\s+/);
+      if (parts.length < 2) return false;
+      const rows = parts[0].split('/');
+      if (rows.length !== 8) return false;
+      const newBoard = new Array(64).fill(null);
+      let kings = { w: 0, b: 0 };
+      for (let i = 0; i < 8; i++) {
+        const r = 7 - i;
+        let f = 0;
+        for (const ch of rows[i]) {
+          if (/[1-8]/.test(ch)) { f += parseInt(ch, 10); }
+          else if (/[pnbrqkPNBRQK]/.test(ch)) {
+            if (f > 7) return false;
+            const color = ch === ch.toUpperCase() ? WHITE : BLACK;
+            const type = ch.toLowerCase();
+            if (type === 'k') kings[color]++;
+            newBoard[sq(r, f)] = { type, color };
+            f++;
+          } else return false;
+        }
+        if (f !== 8) return false;
+      }
+      if (kings.w !== 1 || kings.b !== 1) return false;
+      const turn = parts[1] === 'b' ? BLACK : WHITE;
+      const castStr = parts[2] || '-';
+      const epStr = parts[3] || '-';
+
+      this.board = newBoard;
+      this.turn = turn;
+      this.castling = {
+        wK: castStr.includes('K') && !!(newBoard[sq(0,4)] && newBoard[sq(0,4)].type==='k' && newBoard[sq(0,7)] && newBoard[sq(0,7)].type==='r'),
+        wQ: castStr.includes('Q') && !!(newBoard[sq(0,4)] && newBoard[sq(0,4)].type==='k' && newBoard[sq(0,0)] && newBoard[sq(0,0)].type==='r'),
+        bK: castStr.includes('k') && !!(newBoard[sq(7,4)] && newBoard[sq(7,4)].type==='k' && newBoard[sq(7,7)] && newBoard[sq(7,7)].type==='r'),
+        bQ: castStr.includes('q') && !!(newBoard[sq(7,4)] && newBoard[sq(7,4)].type==='k' && newBoard[sq(7,0)] && newBoard[sq(7,0)].type==='r'),
+      };
+      this.epSquare = /^[a-h][36]$/.test(epStr) ? nameToSquare(epStr) : null;
+      this.halfmoveClock = parseInt(parts[4], 10) || 0;
+      this.fullmoveNumber = parseInt(parts[5], 10) || 1;
+      this.history = [];
+      this.positionCounts = new Map();
+      this.status = 'playing';
+      this.winner = null;
+      this.drawReason = null;
+      this.capturedPieces = { w: [], b: [] };
+      // The side NOT to move must not be in check (illegal position)
+      if (this.isInCheck(opponent(this.turn))) return false;
+      this.recordPosition();
+      this._updateGameStatus();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 }
 
 // Export for browser (attach to window) and for potential module use
