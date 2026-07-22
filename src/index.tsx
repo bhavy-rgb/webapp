@@ -243,33 +243,54 @@ app.get('/', (c) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FIDE Chess — Play Friends &amp; Maia</title>
+  <title>World Chess — Play Friends &amp; Maia · Full FIDE Rules</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
   <link href="/static/style.css" rel="stylesheet">
 </head>
 <body>
   <div id="app-root">
     <header id="app-header">
-      <h1 id="app-title"><span class="title-icon">♞</span> FIDE Chess</h1>
-      <p id="app-subtitle">Full FIDE rules — play locally, against Maia, or with a friend online</p>
+      <h1 id="app-title">
+        <span class="title-mark">
+          <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M9 3h6l-1 3h1l-1.5 3.5c1.6 1 2.5 2.6 2.5 4.5v2H8v-2c0-1.9.9-3.5 2.5-4.5L9 6h1L9 3Z"/>
+            <rect x="6.5" y="17" width="11" height="2.4"/>
+            <rect x="5.5" y="20" width="13" height="2.4"/>
+          </svg>
+        </span>
+        World<span class="title-sub">Chess</span>
+      </h1>
+      <p id="app-subtitle">Full FIDE Laws of Chess. Play pass &amp; play, against Maia, or a friend online.</p>
     </header>
 
-    <!-- ======== Mode selection menu ======== -->
-    <section id="mode-menu">
-      <div class="mode-card" id="mode-local">
-        <div class="mode-icon">👥</div>
-        <h3>Pass &amp; Play</h3>
-        <p>Two players on this device</p>
+    <!-- ======== Mode selection (hero) ======== -->
+    <section id="mode-hero">
+      <div class="hero-head">
+        <h2>WE REVOLUTIONIZE<br><span class="hl">THE GAME</span> OF CHESS</h2>
+        <p>Start a new game and compete, invite a friend and train, or challenge the human-like Maia bot — no hassle, one click to play.</p>
       </div>
-      <div class="mode-card" id="mode-maia">
-        <div class="mode-icon">🤖</div>
-        <h3>Play Against Maia</h3>
-        <p>Human-like bot, rated 600–1900</p>
-      </div>
-      <div class="mode-card" id="mode-friend">
-        <div class="mode-icon">🌐</div>
-        <h3>Play a Friend Online</h3>
-        <p>Create a game &amp; share the code</p>
+      <div id="mode-menu">
+        <div class="mode-card" id="mode-local">
+          <span class="mode-num">01 / MODE</span>
+          <div class="mode-icon">♟</div>
+          <h3>Pass &amp; Play</h3>
+          <p>Two players, one device. Full FIDE rules, clocks and draw claims.</p>
+          <span class="go">Start →</span>
+        </div>
+        <div class="mode-card" id="mode-maia">
+          <span class="mode-num">02 / MODE</span>
+          <div class="mode-icon">🤖</div>
+          <h3>Play Maia</h3>
+          <p>A human-like bot calibrated across ratings 600–1900.</p>
+          <span class="go">Configure →</span>
+        </div>
+        <div class="mode-card" id="mode-friend">
+          <span class="mode-num">03 / MODE</span>
+          <div class="mode-icon">🌐</div>
+          <h3>Play a Friend</h3>
+          <p>Create a game, share a code or invite link, sync online.</p>
+          <span class="go">Create →</span>
+        </div>
       </div>
     </section>
 

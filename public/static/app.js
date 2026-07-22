@@ -47,7 +47,7 @@
   const claimFiftyBtn = $('btn-claim-fifty');
   const promotionModal = $('promotion-modal');
   const promotionChoicesEl = $('promotion-choices');
-  const modeMenuEl = $('mode-menu');
+  const modeMenuEl = $('mode-hero');
   const mainLayoutEl = $('main-layout');
   const shareBannerEl = $('share-banner');
   const shareCodeEl = $('share-code');
