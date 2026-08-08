@@ -1,109 +1,111 @@
-# FIDE Chess — Full Rules Chess Game
+# ♞ Chessify — Learn How Every Piece Moves
 
-## Project Overview
-- **Name**: FIDE Chess
-- **Goal**: A fully playable chess web app that implements the **official FIDE Laws of Chess** exactly (Articles 1–5 and 9), now with three game modes:
-  1. **Pass & Play** — two players on the same device
-  2. **Play Against Maia** — a human-like bot with 7 rating levels (600–1900)
-  3. **Play a Friend Online** — create a game, share a 6-character code / invite link
-- **Piece set**: `cburnett` (open-source SVGs, the Lichess default piece family)
+A scroll-animated chess piece-learning app. Six piece cards (one per piece type),
+each with a live 8×8 movement diagram, plus auth, a lobby, training mode, a
+bot to practice against — and live **1v1 friend games via invite link**.
 
-## Game Modes
+## Quick start
 
-### 🤖 Play Against Maia
-Inspired by [CSSLab/maia-chess](https://github.com/CSSLab/maia-chess) — Maia is a neural network trained to play like *humans* at specific rating levels rather than playing the objectively best move.
-
-> **Implementation note**: the real Maia networks require lc0 (Leela Chess Zero) GPU inference, which cannot run on Cloudflare Pages or in the browser. This app reproduces Maia's defining behaviour — "play the move a human of rating X would play" — with a classical alpha-beta evaluation plus **softmax (probability-weighted) move selection** whose temperature, search depth and blunder rate are calibrated per rating level (`public/static/maia-bot.js`).
-
-Configuration dialog (matches the reference design):
-- **Opponent**: Maia 600 / 900 / 1100 / 1300 / 1500 / 1700 / 1900
-- **Time Control**: presets 3+0, 5+2, 10+0, 15+10, Unlimited — or custom via Time/Increment sliders
-- **Maia thinking time**: Instant or Human-like (natural, rating-scaled delays)
-- **Start from custom position**: paste any FEN
-- **Choose your color**: White / Black / Random
-
-### 🌐 Play a Friend Online
-- **Create Game** → get a 6-char code (e.g. `AB3XY9`) + copyable invite link (`/?game=AB3XY9`)
-- **Join Game** → enter the friend's code (or just open the invite link)
-- Time controls with server-authoritative clocks + increment; flag fall detected server-side
-- Moves sync by polling every 2s; turn order and player identity enforced server-side (secret per-player tokens)
-- Resign, draw offers (accept/decline), and claimable FIDE draws (threefold / 50-move) all supported online
-
-### 👥 Pass & Play
-The original local two-player mode, with undo, flip board, resign, agreed draws and draw claims.
-
-## Rules Implemented (mapped to FIDE Articles)
-| Article | Rule | Status |
-|---|---|---|
-| 2 | Initial position of pieces | ✅ |
-| 3.1–3.6 | Legal moves for K, Q, R, B, N (incl. blocked sliding paths) | ✅ |
-| 3.7a–c | Pawn forward move, double-step from start rank, diagonal capture | ✅ |
-| 3.7d | **En passant** capture (only immediately after opponent's double pawn push) | ✅ |
-| 3.7e | **Pawn promotion** (Q/R/B/N choice via modal) | ✅ |
-| 3.8a–b | **Castling** (king/queen-side), forfeited once king or that rook has moved, and blocked if king's start/transit/destination square is attacked or squares between are occupied | ✅ |
-| 4 | A move is only legal if it does not leave the mover's own king in check (pin/check detection) | ✅ |
-| 5.1a | **Checkmate** detection ends the game | ✅ |
-| 5.2a | **Stalemate** → draw | ✅ |
-| 5.2b / 9.6 | **Dead position** (insufficient material) → automatic draw | ✅ |
-| 5.1b | Resignation | ✅ |
-| 5.2c | Draw by agreement | ✅ |
-| 9.2 | **Threefold repetition** — draw is *claimable* by a player (not automatic, per the Law) | ✅ |
-| 9.3 | **50-move rule** — draw is *claimable* once 50 full moves pass with no pawn move or capture | ✅ |
-
-Position-repetition tracking includes side to move, castling rights, and en passant availability, per the Law's exact definition of "the same position."
-
-## URLs
-- **GitHub**: https://github.com/bhavy-rgb/webapp
-- **Local dev preview**: http://localhost:3000 (inside sandbox)
-- **Production**: Deploy with Cloudflare Pages (see Deployment section)
-
-## API Endpoints (online friend games)
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/games` | Create game `{color, timeMinutes, incrementSeconds}` → `{code, token, color}` |
-| POST | `/api/games/:code/join` | Join as the remaining color → `{token, color}` |
-| GET | `/api/games/:code/state` | Poll state: moves, clocks, status, result, draw offer |
-| POST | `/api/games/:code/move` | Submit a move `{token, move:{from,to,promotion}, moveIndex, result?}` |
-| POST | `/api/games/:code/resign` | Resign `{token}` |
-| POST | `/api/games/:code/draw` | `{token, action: offer\|accept\|decline\|claim, reason?}` |
-
-## Architecture
-- **Backend**: Hono (Cloudflare Pages/Workers) — serves the HTML shell, static assets, and the friend-game REST API (`src/index.tsx`)
-- **Chess engine**: `public/static/chess-engine.js` — pure, dependency-free `ChessGame` class implementing full FIDE move generation, legality checking, game-end detection, and FEN import/export
-- **Maia bot**: `public/static/maia-bot.js` — rating-calibrated human-like move selection (depth 1–4 alpha-beta + temperature softmax + blunder model), levels 600–1900
-- **UI controller**: `public/static/app.js` — mode menu, board interaction, clocks, Maia scheduling, online polling/sync, config modals
-- **Styling**: `public/static/style.css` — dark theme, brown/cream board, config modals matching the reference design
-
-## Data Architecture
-- **Storage**: Cloudflare **D1** (SQLite) — single `games` table for online friend games (code, per-player secret tokens, JSON move list, clocks, status/result, draw offers). See `migrations/0001_online_games.sql`.
-- **Local & Maia games**: fully client-side, no persistence (state resets on New Game / reload)
-- **Data flow**: both clients run the identical FIDE engine and validate every move; the server enforces turn order, identity (tokens), clock accounting and results
-
-## User Guide
-1. Pick a mode from the menu: **Pass & Play**, **Play Against Maia**, or **Play a Friend Online**.
-2. **Maia**: pick level, time control, thinking-time style, optional FEN start position and your color → Start Game.
-3. **Friend game**: Create → share the code or "Copy invite link"; your friend opens the link (or Join Game → enter code). The board auto-syncs.
-4. **Moving**: click a piece — legal destinations are highlighted (dot = quiet move, ring = capture). Castle by moving the king two squares. Promotion opens a Q/R/B/N modal.
-5. **Clocks**: shown when a time control is set; the active player's clock is highlighted, low time turns red, flag fall ends the game.
-6. **Draws**: claim buttons for threefold/50-move appear only when actually available (per the Law); online games also support offer/accept/decline.
-
-## Development
 ```bash
-npm install
-npm run build
-npx wrangler d1 migrations apply webapp-production --local   # set up local D1
-npx wrangler pages dev dist --d1=webapp-production --local --ip 0.0.0.0 --port 3000
+npm install        # installs client + server workspaces
+cp .env.example .env   # then edit JWT_SECRET
+npm run dev        # runs server (:3001) + client (:5173) together
 ```
 
-## Testing
-```bash
-node tests/run-tests.cjs   # 72 assertions: castling, en passant, promotion, stalemate,
-                           # dead position, 50-move, repetition, pins, Fool's Mate
-```
-All 72 assertions pass. The Maia bot and FEN support are additionally verified for move legality at every level and mate-finding at high levels.
+Open http://localhost:5173, create an account, and head to **Training**.
 
-## Deployment
-- **Platform**: Cloudflare Pages + D1
-- **Status**: Ready to deploy — create a production D1 database (`npx wrangler d1 create webapp-production`), put its `database_id` into `wrangler.jsonc`, apply migrations, then `npm run deploy`
-- **Tech Stack**: Hono + TypeScript + vanilla JS chess engine + Cloudflare D1
-- **Last Updated**: 2026-07-20
+## Play a friend (1v1 via link)
+
+From the **Lobby**, the *Play a friend* card creates a live game:
+
+1. Pick a time control (3+0 / 5+2 / 10+0 / 15+10 / unlimited) and your color.
+2. Share the 6-character code or the **invite link** (`/play/<CODE>`).
+3. Your friend opens the link — they're seated automatically and the game starts.
+
+**Login is optional.** Anyone can open the lobby, create a game, or join via an
+invite link as an anonymous guest (a stable per-browser guest id is generated
+automatically). Signed-in users appear with their username; guests appear as
+`Guest-XXXX`.
+
+### Game API (JWT **or** `X-Guest-Id` header)
+
+| Method | Route | What it does |
+| --- | --- | --- |
+| `POST` | `/api/games` | Create a game → `{ code, color, timeMinutes, incrementSeconds }` |
+| `POST` | `/api/games/:code/join` | Take the open seat (re-join safe) |
+| `GET`  | `/api/games/:code/state` | Poll full state — moves, FEN, clocks, draw offers |
+| `POST` | `/api/games/:code/move` | Submit a move — **server-side turn, legality (chess.js) & clock enforcement**, server-side game-end detection |
+| `POST` | `/api/games/:code/resign` | Resign |
+| `POST` | `/api/games/:code/draw` | `{ action: "offer" \| "accept" \| "decline" }` |
+
+Ported from the previous Hono/D1 game API, upgraded so identity comes from the
+authenticated user or a per-browser guest id, and move legality + game end
+(checkmate / stalemate / draws / flag falls) are verified on the server with
+`chess.js`. Games persist in `server/data/games.json` (same file-store pattern
+as users).
+
+## Scripts
+
+| Command             | What it does                                  |
+| ------------------- | --------------------------------------------- |
+| `npm run dev`       | Server + client with hot reload               |
+| `npm run dev:server`| Express API only (`http://localhost:3001`)    |
+| `npm run dev:client`| Vite dev server only (`http://localhost:5173`)|
+| `npm run check`     | `tsc --noEmit` for server + client            |
+| `npm run build`     | Production build of the client                |
+| `npm start`         | Serve the built client from the API server    |
+
+## Stack rationale (and deviations from the brief)
+
+| Requirement | Chosen | Why |
+| --- | --- | --- |
+| React | **React 19 + Vite** | Vite is the default CRA replacement — faster dev server and first-class Tailwind v4 support. |
+| Styling | **Tailwind CSS v4** | Zero-config via the official Vite plugin. |
+| Animation | **Framer Motion** + **react-intersection-observer** | `whileInView` / `useInView` give scroll-triggered reveals with proper staggering; plain CSS would need manual JS for the same feel. |
+| Backend | **Node + Express** | Straightforward REST API for auth. |
+| Auth | **JWT + bcrypt** (`jsonwebtoken`, `bcryptjs`) | Stateless, well-understood, no session store needed. |
+| Database | **File-backed JSON store** | MongoDB is **not installed** on this machine and a local Mongo setup wasn't feasible here. The store is behind a small `UserStore` interface (`server/src/db.ts`), so swapping in MongoDB/Postgres later only means writing one implementation — routes don't change. |
+| Routing | **React Router v7** | Spec requirement, matches the multi-page structure. |
+| State | **React Context** | Auth state only — Redux/Zustand would be overkill at this size. |
+| Board / bot | **`chess.js` + `react-chessboard`** | Legal move logic and drag-and-drop board come from battle-tested libs instead of hand-rolling. The bot picks a random legal reply (v1 placeholder — see below). |
+
+### Note on "32 pieces"
+
+Movement rules are per **piece type**, not per instance — a pawn on a2 moves exactly
+like a pawn on h7. Showing all 32 pieces would render 32 identical diagrams, so
+Chessify shows **6 cards** (Pawn, Knight, Bishop, Rook, Queen, King). Happy to switch
+to 32 individual cards (White/Black × all 8 pawns, etc.) if that's really wanted.
+
+### Bot mode scope
+
+v1 bot plays a random legal move from `chess.js`. A real engine (Stockfish via
+WASM or an API) can be dropped in by replacing `botMove()` in `client/src/pages/Bot.tsx`.
+
+## Project structure
+
+```
+chessify/
+├── client/            React 19 + Vite + Tailwind v4 + Framer Motion
+│   └── src/
+│       ├── lib/pieces.ts        piece data + movement → diagram squares
+│       ├── components/          BoardDiagram, PieceCard, Navbar, ScrollReveal
+│       └── pages/               Login, Home, Lobby, Training, Bot
+├── server/            Express + JWT + bcrypt
+│   └── src/db.ts                swappable JSON user store
+└── .env.example
+```
+
+## API
+
+| Method | Route            | Body / notes                       |
+| ------ | ---------------- | ---------------------------------- |
+| POST   | `/api/auth/signup`| `{ username, email, password }` → `{ token, user }` |
+| POST   | `/api/auth/login` | `{ identifier, password }` → `{ token, user }` |
+| GET    | `/api/auth/me`    | `Authorization: Bearer <token>` → `{ user }` |
+| GET    | `/api/health`     | Liveness check                     |
+
+## Roadmap ideas
+
+- Real engine for the bot (Stockfish WASM).
+- Timed training quizzes per piece.
+- Dark theme.
