@@ -268,7 +268,10 @@ export default function Play() {
   const finished = game.status === "finished";
   const opponentName =
     yourColor === "w" ? game.black : yourColor === "b" ? game.white : game.black;
-  const yourName = user?.username ?? "You";
+  const yourName =
+    user?.username ??
+    (yourColor === "w" ? game.white : yourColor === "b" ? game.black : null) ??
+    "You";
   const topClock = yourColor === "b" ? clocks.w : clocks.b;
   const bottomClock = yourColor === "b" ? clocks.b : clocks.w;
   const opponentDrawOffer = game.drawOffer && game.drawOffer !== yourColor;

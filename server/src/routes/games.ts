@@ -2,7 +2,7 @@
  * 1v1 friend-game routes — port of the proven Hono/D1 game API onto Express.
  *
  * Improvements over the old version:
- *  - Identity is the authenticated user (JWT), not an anonymous token.
+ *  - Identity is the authenticated user (JWT) or a guest id — login optional.
  *  - Moves are validated server-side with chess.js (legality + turn),
  *    and game end (checkmate / stalemate / draws) is detected server-side
  *    instead of trusting the client.
@@ -17,12 +17,13 @@ import {
   type Color,
   type Game,
 } from "../gameStore.js";
-import { requireAuth, type AuthRequest } from "../middleware/auth.js";
+import { identifyPlayer, type PlayerRequest } from "../middleware/auth.js";
 
 const router = Router();
 
-// All game routes require a signed-in user.
-router.use(requireAuth);
+// Game routes accept a signed-in user OR an anonymous guest (X-Guest-Id header).
+// Login is NOT mandatory to play 1v1 via an invite link.
+router.use(identifyPlayer);
 
 function buildChess(g: Game): Chess {
   const chess = new Chess();
@@ -80,8 +81,9 @@ function endOnFlag(g: Game, whiteMs: number, blackMs: number, flagged: Color): G
 // ---------------------------------------------------------------------------
 // POST /api/games — create a game, get a shareable code + invite link
 // ---------------------------------------------------------------------------
-router.post("/", (req: AuthRequest, res: Response) => {
-  const user = req.user!;
+router.post("/", (req: PlayerRequest, res: Response) => {
+  const playerId = req.playerId!;
+  const playerName = req.playerName!;
   const body = (req.body ?? {}) as Record<string, unknown>;
 
   const rawColor = body.color;
@@ -95,10 +97,10 @@ router.post("/", (req: AuthRequest, res: Response) => {
 
   gameStore.create({
     code,
-    whiteId: color === "w" ? user.id : null,
-    blackId: color === "b" ? user.id : null,
-    whiteName: color === "w" ? user.username : null,
-    blackName: color === "b" ? user.username : null,
+    whiteId: color === "w" ? playerId : null,
+    blackId: color === "b" ? playerId : null,
+    whiteName: color === "w" ? playerName : null,
+    blackName: color === "b" ? playerName : null,
     creatorColor: color,
     moves: [],
     fen: new Chess().fen(),
@@ -119,13 +121,13 @@ router.post("/", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // POST /api/games/:code/join — take the open seat
 // ---------------------------------------------------------------------------
-router.post("/:code/join", (req: AuthRequest, res: Response) => {
-  const user = req.user!;
+router.post("/:code/join", (req: PlayerRequest, res: Response) => {
+  const playerId = req.playerId!;
   const g = gameStore.find(req.params.code);
   if (!g) return res.status(404).json({ message: "Game not found" });
 
   // Already seated? Treat as a re-join (e.g. page refresh / invite reopened).
-  const existing = playerColor(g, user.id);
+  const existing = playerColor(g, playerId);
   if (existing) {
     return res.json({
       code: g.code,
@@ -140,8 +142,8 @@ router.post("/:code/join", (req: AuthRequest, res: Response) => {
 
   const color: Color = g.whiteId ? "b" : "w";
   gameStore.update(g.code, {
-    [color === "w" ? "whiteId" : "blackId"]: user.id,
-    [color === "w" ? "whiteName" : "blackName"]: user.username,
+    [color === "w" ? "whiteId" : "blackId"]: playerId,
+    [color === "w" ? "whiteName" : "blackName"]: req.playerName!,
     status: "active",
     lastMoveAt: Date.now(),
   } as Partial<Game>);
@@ -157,7 +159,7 @@ router.post("/:code/join", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/games/:code/state — poll game state (also enforces flag falls)
 // ---------------------------------------------------------------------------
-router.get("/:code/state", (req: AuthRequest, res: Response) => {
+router.get("/:code/state", (req: PlayerRequest, res: Response) => {
   let g = gameStore.find(req.params.code);
   if (!g) return res.status(404).json({ message: "Game not found" });
 
@@ -169,20 +171,19 @@ router.get("/:code/state", (req: AuthRequest, res: Response) => {
 
   return res.json({
     ...publicState(g, whiteMs, blackMs),
-    yourColor: playerColor(g, req.user!.id),
+    yourColor: playerColor(g, req.playerId!),
   });
 });
 
 // ---------------------------------------------------------------------------
 // POST /api/games/:code/move — submit a move (turn/identity/legality/clock enforced)
 // ---------------------------------------------------------------------------
-router.post("/:code/move", (req: AuthRequest, res: Response) => {
-  const user = req.user!;
+router.post("/:code/move", (req: PlayerRequest, res: Response) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const g = gameStore.find(req.params.code);
   if (!g) return res.status(404).json({ message: "Game not found" });
 
-  const color = playerColor(g, user.id);
+  const color = playerColor(g, req.playerId!);
   if (!color) return res.status(403).json({ message: "Not a player in this game" });
   if (g.status !== "active") return res.status(400).json({ message: "Game is not active" });
 
@@ -270,10 +271,10 @@ router.post("/:code/move", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // POST /api/games/:code/resign
 // ---------------------------------------------------------------------------
-router.post("/:code/resign", (req: AuthRequest, res: Response) => {
+router.post("/:code/resign", (req: PlayerRequest, res: Response) => {
   const g = gameStore.find(req.params.code);
   if (!g) return res.status(404).json({ message: "Game not found" });
-  const color = playerColor(g, req.user!.id);
+  const color = playerColor(g, req.playerId!);
   if (!color) return res.status(403).json({ message: "Not a player in this game" });
   if (g.status === "finished") return res.status(400).json({ message: "Game already finished" });
 
@@ -285,11 +286,11 @@ router.post("/:code/resign", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // POST /api/games/:code/draw — offer / accept / decline
 // ---------------------------------------------------------------------------
-router.post("/:code/draw", (req: AuthRequest, res: Response) => {
+router.post("/:code/draw", (req: PlayerRequest, res: Response) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const g = gameStore.find(req.params.code);
   if (!g) return res.status(404).json({ message: "Game not found" });
-  const color = playerColor(g, req.user!.id);
+  const color = playerColor(g, req.playerId!);
   if (!color) return res.status(403).json({ message: "Not a player in this game" });
   if (g.status !== "active") return res.status(400).json({ message: "Game is not active" });
 

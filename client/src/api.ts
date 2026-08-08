@@ -12,6 +12,21 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+// Anonymous guest identity — lets people play 1v1 via an invite link
+// without creating an account. Stable per browser via localStorage.
+const GUEST_KEY = "chessify_guest_id";
+
+export function getGuestId(): string {
+  let id = localStorage.getItem(GUEST_KEY);
+  if (!id) {
+    id = Array.from(crypto.getRandomValues(new Uint8Array(12)))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    localStorage.setItem(GUEST_KEY, id);
+  }
+  return id;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -30,6 +45,7 @@ export async function api<T>(
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "X-Guest-Id": getGuestId(),
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });

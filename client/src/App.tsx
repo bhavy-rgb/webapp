@@ -33,14 +33,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/lobby"
-            element={
-              <ProtectedRoute>
-                <Lobby />
-              </ProtectedRoute>
-            }
-          />
+          {/* Open to guests — login is not required to play */}
+          <Route path="/lobby" element={<Lobby />} />
           <Route
             path="/training"
             element={
@@ -49,22 +43,10 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/bot"
-            element={
-              <ProtectedRoute>
-                <Bot />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/play/:code"
-            element={
-              <ProtectedRoute>
-                <Play />
-              </ProtectedRoute>
-            }
-          />
+          {/* Open to guests — login is not required to play */}
+          <Route path="/bot" element={<Bot />} />
+          {/* Playable without an account — invite links work for guests */}
+          <Route path="/play/:code" element={<Play />} />
           <Route path="/404" element={<NotFound />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

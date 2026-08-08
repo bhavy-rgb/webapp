@@ -20,9 +20,14 @@ From the **Lobby**, the *Play a friend* card creates a live game:
 
 1. Pick a time control (3+0 / 5+2 / 10+0 / 15+10 / unlimited) and your color.
 2. Share the 6-character code or the **invite link** (`/play/<CODE>`).
-3. Your friend signs in and opens the link — they're seated automatically and the game starts.
+3. Your friend opens the link — they're seated automatically and the game starts.
 
-### Game API (all routes require a JWT)
+**Login is optional.** Anyone can open the lobby, create a game, or join via an
+invite link as an anonymous guest (a stable per-browser guest id is generated
+automatically). Signed-in users appear with their username; guests appear as
+`Guest-XXXX`.
+
+### Game API (JWT **or** `X-Guest-Id` header)
 
 | Method | Route | What it does |
 | --- | --- | --- |
@@ -34,7 +39,7 @@ From the **Lobby**, the *Play a friend* card creates a live game:
 | `POST` | `/api/games/:code/draw` | `{ action: "offer" \| "accept" \| "decline" }` |
 
 Ported from the previous Hono/D1 game API, upgraded so identity comes from the
-authenticated user (not anonymous tokens) and move legality + game end
+authenticated user or a per-browser guest id, and move legality + game end
 (checkmate / stalemate / draws / flag falls) are verified on the server with
 `chess.js`. Games persist in `server/data/games.json` (same file-store pattern
 as users).
