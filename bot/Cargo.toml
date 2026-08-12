@@ -1,0 +1,13 @@
+[package]
+name = "chessify-bot"
+version = "0.1.0"
+edition = "2021"
+description = "Minimax (alpha-beta) chess engine for Chessify"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[[bin]]
+name = "chessify-bot"
+path = "src/main.rs"
