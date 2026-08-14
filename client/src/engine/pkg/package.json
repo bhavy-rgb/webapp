@@ -1,0 +1,16 @@
+{
+  "name": "chessify-bot",
+  "type": "module",
+  "description": "Alpha-beta chess engine for Chessify — native CLI + WebAssembly",
+  "version": "0.2.0",
+  "files": [
+    "chessify_bot_bg.wasm",
+    "chessify_bot.js",
+    "chessify_bot.d.ts"
+  ],
+  "main": "chessify_bot.js",
+  "types": "chessify_bot.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

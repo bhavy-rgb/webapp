@@ -8,14 +8,10 @@
 //!
 //! Output of `bestmove` is JSON: {"bestmove":"e2e4","score":34,"depth":5,"nodes":12345}
 
-mod board;
-mod eval;
-mod movegen;
-mod search;
-
-use board::{Board, Move, START_FEN};
-use movegen::{in_check, legal_moves, make_move, perft};
-use search::search;
+use chessify_bot::board::{self, Board, Move, START_FEN};
+use chessify_bot::eval;
+use chessify_bot::movegen::{in_check, legal_moves, make_move, perft};
+use chessify_bot::search::search;
 use std::io::{self, BufRead, Write};
 
 const DEFAULT_DEPTH: u32 = 5;
@@ -180,7 +176,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use board::Board;
 
     #[test]
     fn perft_startpos() {

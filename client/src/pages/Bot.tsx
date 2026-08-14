@@ -1,17 +1,20 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Cpu, Flag } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
+import { engine, LEVELS, type LevelId } from "@/engine";
 
-type Status = "playing" | "check" | "checkmate" | "draw";
+type Status = "playing" | "check" | "checkmate" | "draw" | "resigned";
+type PlayerColor = "w" | "b";
 
 const statusLabels: Record<Status, { text: string; className: string }> = {
-  playing: { text: "Your move — play as White", className: "bg-forest/10 text-forest" },
+  playing: { text: "Game on", className: "bg-forest/10 text-forest" },
   check: { text: "Check!", className: "bg-capture/10 text-capture" },
   checkmate: { text: "Checkmate — game over", className: "bg-forest-deep text-cream" },
   draw: { text: "Draw — game over", className: "bg-parchment text-ink-soft" },
+  resigned: { text: "You resigned", className: "bg-parchment text-ink-soft" },
 };
 
 export default function Bot() {
@@ -20,9 +23,17 @@ export default function Bot() {
   const [history, setHistory] = useState<string[]>([]);
   const [status, setStatus] = useState<Status>("playing");
   const [thinking, setThinking] = useState(false);
-  const botTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [level, setLevel] = useState<LevelId>(2);
+  const [playerColor, setPlayerColor] = useState<PlayerColor>("w");
+  const [evalCp, setEvalCp] = useState(0); // centipawns, white perspective
+  const [engineInfo, setEngineInfo] = useState<string | null>(null);
+  const requestSeq = useRef(0);
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(480);
+
+  useEffect(() => {
+    engine.warmUp();
+  }, []);
 
   const refresh = () => {
     const g = gameRef.current;
@@ -34,41 +45,69 @@ export default function Bot() {
     else setStatus("playing");
   };
 
-  const botMove = () => {
+  const updateEval = (currentFen: string, turn: PlayerColor) => {
+    engine
+      .evaluate(currentFen)
+      .then((cp) => setEvalCp(turn === "w" ? cp : -cp))
+      .catch(() => {});
+  };
+
+  const botMove = async () => {
     const g = gameRef.current;
     if (g.isGameOver()) return;
-    const moves = g.moves({ verbose: true });
-    if (moves.length === 0) return;
-    const move = moves[Math.floor(Math.random() * moves.length)];
-    g.move({ from: move.from, to: move.to, promotion: "q" });
-    refresh();
+    const seq = ++requestSeq.current;
+    setThinking(true);
+    const uciHistory = g
+      .history({ verbose: true })
+      .map((m) => m.from + m.to + (m.promotion ?? ""))
+      .join(" ");
+    try {
+      const r = await engine.bestMove(g.fen(), level, uciHistory);
+      if (seq !== requestSeq.current) return; // stale (game was reset)
+      if (r.bestmove) {
+        g.move({
+          from: r.bestmove.slice(0, 2),
+          to: r.bestmove.slice(2, 4),
+          promotion: r.bestmove.length > 4 ? r.bestmove[4] : undefined,
+        });
+        if (r.depth !== undefined && r.nodes !== undefined && r.depth > 0) {
+          setEngineInfo(`depth ${r.depth} · ${r.nodes.toLocaleString()} nodes`);
+        } else {
+          setEngineInfo(null);
+        }
+        refresh();
+        updateEval(g.fen(), g.turn() as PlayerColor);
+      }
+    } catch {
+      // Engine failed (no WASM support?) — random fallback keeps game playable.
+      const moves = g.moves({ verbose: true });
+      if (moves.length > 0) {
+        const m = moves[Math.floor(Math.random() * moves.length)];
+        g.move({ from: m.from, to: m.to, promotion: "q" });
+        refresh();
+      }
+    } finally {
+      if (seq === requestSeq.current) setThinking(false);
+    }
   };
 
   const onPieceDrop = (source: string, target: string): boolean => {
-    if (status === "checkmate" || status === "draw") return false;
+    if (status === "checkmate" || status === "draw" || status === "resigned") return false;
     const g = gameRef.current;
-    if (g.turn() !== "w") return false;
+    if (g.turn() !== playerColor || thinking) return false;
 
     try {
-      const result = g.move({
-        from: source,
-        to: target,
-        promotion: "q",
-      });
+      const result = g.move({ from: source, to: target, promotion: "q" });
       if (!result) return false;
     } catch {
       return false;
     }
 
     refresh();
-    if (gameRef.current.isGameOver()) {
-      return true;
+    updateEval(g.fen(), g.turn() as PlayerColor);
+    if (!gameRef.current.isGameOver()) {
+      void botMove();
     }
-    setThinking(true);
-    botTimer.current = setTimeout(() => {
-      botMove();
-      setThinking(false);
-    }, 450);
     return true;
   };
 
@@ -82,21 +121,39 @@ export default function Bot() {
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (botTimer.current) clearTimeout(botTimer.current);
-    };
-  }, []);
-
-  const reset = () => {
-    if (botTimer.current) clearTimeout(botTimer.current);
+  const startNewGame = (color: PlayerColor = playerColor) => {
+    requestSeq.current++;
     gameRef.current = new Chess();
     setHistory([]);
     setThinking(false);
-    refresh();
+    setEvalCp(0);
+    setEngineInfo(null);
+    setPlayerColor(color);
+    setStatus("playing");
+    setFen(gameRef.current.fen());
+    if (color === "b") {
+      // Bot opens as White.
+      setTimeout(() => void botMove(), 250);
+    }
+  };
+
+  const resign = () => {
+    if (status !== "playing" && status !== "check") return;
+    requestSeq.current++;
+    setThinking(false);
+    setStatus("resigned");
   };
 
   const lastMove = history[history.length - 1];
+
+  // Eval bar: map centipawns → 0..100% white share (sigmoid-ish clamp).
+  const whitePct = Math.max(4, Math.min(96, 50 + (evalCp / 20)));
+  const evalLabel =
+    Math.abs(evalCp) >= 9000
+      ? evalCp > 0
+        ? "M+"
+        : "M-"
+      : `${evalCp >= 0 ? "+" : ""}${(evalCp / 100).toFixed(1)}`;
 
   return (
     <div className="grain min-h-screen bg-cream">
@@ -111,8 +168,8 @@ export default function Bot() {
             You vs. the machine
           </h1>
           <p className="mt-4 text-ink-soft">
-            Play as White. Every move is validated for legality — if a knight can't
-            go there, the board won't let you. The bot replies after a moment.
+            A real chess engine — alpha-beta search with a transposition table,
+            written in Rust and compiled to WebAssembly. Pick a difficulty and play.
           </p>
         </ScrollReveal>
 
@@ -120,11 +177,24 @@ export default function Bot() {
           {/* Board */}
           <ScrollReveal>
             <div className="rounded-3xl border border-parchment bg-white p-4 shadow-[0_20px_60px_-20px_rgba(38,35,30,0.2)]">
+              {/* Eval bar */}
+              <div className="mb-3 flex items-center gap-2 px-1">
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-ink/80">
+                  <div
+                    className="h-full rounded-full bg-cream transition-all duration-500"
+                    style={{ width: `${whitePct}%` }}
+                  />
+                </div>
+                <span className="w-12 text-right font-mono text-xs font-semibold text-ink-soft">
+                  {evalLabel}
+                </span>
+              </div>
+
               <div className="w-full" ref={boardWrapRef}>
                 <Chessboard
                   position={fen}
                   onPieceDrop={onPieceDrop}
-                  boardOrientation="white"
+                  boardOrientation={playerColor === "w" ? "white" : "black"}
                   areArrowsAllowed={false}
                   boardWidth={Math.min(boardWidth, 620)}
                   animationDuration={180}
@@ -133,18 +203,30 @@ export default function Bot() {
                   customBoardStyle={{ borderRadius: "12px", overflow: "hidden" }}
                 />
               </div>
-              <div className="mt-4 flex items-center justify-between px-1">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1">
                 <span
                   className={`rounded-full px-4 py-2 text-sm font-semibold ${statusLabels[status].className}`}
                 >
-                  {statusLabels[status].text}
+                  {status === "playing"
+                    ? gameRef.current.turn() === playerColor
+                      ? "Your move"
+                      : "Bot to move"
+                    : statusLabels[status].text}
                 </span>
-                <button
-                  onClick={reset}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-parchment px-4 py-2 text-xs font-semibold text-ink-soft transition-all hover:border-terracotta/40 hover:text-terracotta"
-                >
-                  <RotateCcw size={14} /> New game
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={resign}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-parchment px-4 py-2 text-xs font-semibold text-ink-soft transition-all hover:border-capture/40 hover:text-capture"
+                  >
+                    <Flag size={14} /> Resign
+                  </button>
+                  <button
+                    onClick={() => startNewGame()}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-parchment px-4 py-2 text-xs font-semibold text-ink-soft transition-all hover:border-terracotta/40 hover:text-terracotta"
+                  >
+                    <RotateCcw size={14} /> New game
+                  </button>
+                </div>
               </div>
             </div>
           </ScrollReveal>
@@ -152,12 +234,68 @@ export default function Bot() {
           {/* Sidebar */}
           <ScrollReveal delay={0.15} direction="right">
             <div className="flex flex-col gap-5">
+              {/* Difficulty */}
+              <div className="rounded-2xl border border-parchment bg-white p-5">
+                <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ink-soft">
+                  <Cpu size={14} /> Difficulty
+                </h2>
+                <div className="flex flex-wrap gap-1.5">
+                  {LEVELS.map((l) => (
+                    <button
+                      key={l.id}
+                      onClick={() => setLevel(l.id)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                        level === l.id
+                          ? "bg-forest text-cream"
+                          : "border border-parchment text-ink-soft hover:border-forest/40 hover:text-forest"
+                      }`}
+                    >
+                      {l.name}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2.5 text-xs text-ink-soft/80">{LEVELS[level].blurb}</p>
+
+                <h2 className="mb-2 mt-4 text-xs font-semibold uppercase tracking-widest text-ink-soft">
+                  Play as
+                </h2>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => startNewGame("w")}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                      playerColor === "w"
+                        ? "bg-ink text-cream"
+                        : "border border-parchment text-ink-soft hover:border-ink/40"
+                    }`}
+                  >
+                    ♔ White
+                  </button>
+                  <button
+                    onClick={() => startNewGame("b")}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                      playerColor === "b"
+                        ? "bg-ink text-cream"
+                        : "border border-parchment text-ink-soft hover:border-ink/40"
+                    }`}
+                  >
+                    ♚ Black
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-ink-soft/60">
+                  Changing color starts a new game.
+                </p>
+              </div>
+
+              {/* Move history */}
               <div className="rounded-2xl border border-parchment bg-white p-5">
                 <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-soft">
                   Move history
                 </h2>
                 {history.length === 0 ? (
-                  <p className="text-sm text-ink-soft/70">No moves yet. It's your turn!</p>
+                  <p className="text-sm text-ink-soft/70">
+                    No moves yet.{" "}
+                    {playerColor === "w" ? "It's your turn!" : "Bot opens the game."}
+                  </p>
                 ) : (
                   <ol className="grid max-h-48 grid-cols-[auto_1fr] gap-x-3 gap-y-1 overflow-y-auto pr-1 text-sm">
                     {history.map((move, i) => (
@@ -176,17 +314,22 @@ export default function Bot() {
                 )}
                 {thinking && (
                   <p className="mt-3 animate-pulse text-xs font-semibold text-terracotta">
-                    Bot is thinking…
+                    Engine is thinking…
+                  </p>
+                )}
+                {engineInfo && !thinking && (
+                  <p className="mt-3 font-mono text-[11px] text-ink-soft/60">
+                    last search: {engineInfo}
                   </p>
                 )}
               </div>
 
               <div className="rounded-2xl border border-forest/15 bg-forest/5 p-5 text-sm leading-relaxed text-ink-soft">
-                <p className="mb-2 font-semibold text-forest">Tips</p>
+                <p className="mb-2 font-semibold text-forest">Under the hood</p>
                 <ul className="list-inside list-disc space-y-1.5 text-[13px]">
-                  <li>Drag a piece to the square you want.</li>
-                  <li>Pawns promote to queens automatically on the last rank.</li>
-                  <li>Wrong moves simply snap back — nothing is illegal here.</li>
+                  <li>Rust engine compiled to WebAssembly, running in a Web Worker.</li>
+                  <li>Negamax + alpha-beta, transposition table, quiescence search.</li>
+                  <li>Lower levels mix in casual moves so games stay winnable.</li>
                 </ul>
               </div>
 
