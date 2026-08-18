@@ -78,8 +78,14 @@ to 32 individual cards (White/Black × all 8 pawns, etc.) if that's really wante
 
 ### Bot mode scope
 
-v1 bot plays a random legal move from `chess.js`. A real engine (Stockfish via
-WASM or an API) can be dropped in by replacing `botMove()` in `client/src/pages/Bot.tsx`.
+The bot is a **real chess engine written in Rust** (`bot/`), compiled to
+WebAssembly and run inside a Web Worker so the UI never blocks. It uses
+negamax alpha-beta search with a transposition table, quiescence search,
+null-move pruning, killer/history move ordering and a tapered evaluation
+(pawn structure, passed pawns, bishop pair, rook files, king safety, and an
+exchange-simplification principle for winning positions). Five difficulty
+levels from *Beginner* to *Max*, play as White or Black, live eval bar.
+See `bot/README.md` for the full engine write-up and the native CLI.
 
 ## Project structure
 

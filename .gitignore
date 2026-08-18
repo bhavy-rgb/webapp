@@ -24,3 +24,6 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Rust build artifacts
+bot/target/
