@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import Login from "@/pages/Login";
@@ -8,12 +9,14 @@ import Lobby from "@/pages/Lobby";
 import Training from "@/pages/Training";
 import Bot from "@/pages/Bot";
 import Play from "@/pages/Play";
+import { Privacy, Terms } from "@/pages/Legal";
 import NotFound from "@/pages/NotFound";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
         <ScrollToTop />
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -47,10 +50,13 @@ export default function App() {
           <Route path="/bot" element={<Bot />} />
           {/* Playable without an account — invite links work for guests */}
           <Route path="/play/:code" element={<Play />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/404" element={<NotFound />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

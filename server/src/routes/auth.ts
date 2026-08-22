@@ -1,13 +1,29 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import {
   jsonUserStore,
   toPublicUser,
   type UserStore,
 } from "../db.js";
-import { requireAuth, signToken, type AuthRequest } from "../middleware/auth.js";
+import {
+  clearAuthCookie,
+  requireAuth,
+  setAuthCookie,
+  signToken,
+  type AuthRequest,
+} from "../middleware/auth.js";
 
 const router = Router();
+
+// Brute-force protection: max 10 login/signup attempts per 10 min per IP.
+const authLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts — try again in a few minutes" },
+});
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -15,7 +31,7 @@ function pickStore(): UserStore {
   return jsonUserStore;
 }
 
-router.post("/signup", async (req, res) => {
+router.post("/signup", authLimiter, async (req, res) => {
   const { username, email, password } = (req.body ?? {}) as Record<string, unknown>;
   const store = pickStore();
 
@@ -50,14 +66,15 @@ router.post("/signup", async (req, res) => {
       passwordHash,
     });
 
-    return res.status(201).json({ token: signToken(user), user: toPublicUser(user) });
+    setAuthCookie(res, signToken(user));
+    return res.status(201).json({ user: toPublicUser(user) });
   } catch (err) {
     console.error("signup error", err);
     return res.status(500).json({ message: "Could not create account" });
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", authLimiter, async (req, res) => {
   const { identifier, password } = (req.body ?? {}) as Record<string, unknown>;
   const store = pickStore();
 
@@ -79,7 +96,8 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    return res.json({ token: signToken(user), user: toPublicUser(user) });
+    setAuthCookie(res, signToken(user));
+    return res.json({ user: toPublicUser(user) });
   } catch (err) {
     console.error("login error", err);
     return res.status(500).json({ message: "Could not log in" });
@@ -89,6 +107,11 @@ router.post("/login", async (req, res) => {
 router.get("/me", requireAuth, (req: AuthRequest, res) => {
   if (!req.user) return res.status(401).json({ message: "Not authenticated" });
   return res.json({ user: toPublicUser(req.user) });
+});
+
+router.post("/logout", (_req, res) => {
+  clearAuthCookie(res);
+  return res.json({ ok: true });
 });
 
 export default router;

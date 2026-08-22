@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronDown, GraduationCap, Puzzle, Swords } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import HeroVideo from "@/components/HeroVideo";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { PIECES } from "@/lib/pieces";
 import { BoardDiagram } from "@/components/BoardDiagram";
@@ -71,19 +73,14 @@ export default function Home() {
               </motion.div>
             </div>
 
-            {/* Piece diagram */}
+            {/* 3D hero video (lazy-loaded, subtle scroll parallax) */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.92 }}
+              initial={{ opacity: 0, scale: 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.45, duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
-              className="mx-auto w-full max-w-[300px]"
+              className="mx-auto w-full max-w-xl"
             >
-              <div className="rounded-3xl border border-parchment bg-white p-5 shadow-[0_20px_60px_-20px_rgba(38,35,30,0.2)]">
-                <BoardDiagram piece={PIECES[1]} />
-                <p className="mt-3 text-center text-sm font-medium text-ink-soft">
-                  The knight — <span className="text-ink">an L-shape, every time.</span>
-                </p>
-              </div>
+              <HeroVideo />
             </motion.div>
           </div>
         </div>
@@ -108,7 +105,13 @@ export default function Home() {
 
       {/* ===== FEATURES ===== */}
       <section className="mx-auto max-w-6xl px-5 py-24">
-        <ScrollReveal className="mx-auto mb-14 max-w-xl text-center">
+        <ScrollReveal className="mx-auto mb-14 grid max-w-xl place-items-center gap-8 text-center">
+          <div className="w-full max-w-[280px] rounded-3xl border border-parchment bg-white p-5 shadow-[0_20px_60px_-20px_rgba(38,35,30,0.2)]">
+            <BoardDiagram piece={PIECES[1]} />
+            <p className="mt-3 text-center text-sm font-medium text-ink-soft">
+              The knight — <span className="text-ink">an L-shape, every time.</span>
+            </p>
+          </div>
           <h2 className="font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
             From first move to first win
           </h2>
@@ -223,6 +226,8 @@ export default function Home() {
           </div>
         </ScrollReveal>
       </section>
+
+      <Footer />
     </div>
   );
 }
