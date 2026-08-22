@@ -4,11 +4,12 @@ import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { Check, Copy, Flag, Handshake, Hourglass } from "lucide-react";
 import Navbar from "@/components/Navbar";
-import { Spinner } from "@/components/Spinner";
+import { PlaySkeleton } from "@/components/Skeleton";
 import { ApiError, gamesApi, type GameState } from "@/api";
 import { useAuth } from "@/context/AuthContext";
 
-const POLL_MS = 1500;
+/** Polling cadence used only when the SSE channel is unavailable. */
+const FALLBACK_POLL_MS = 3000;
 
 function fmtClock(ms: number | null): string {
   if (ms === null) return "--:--";
@@ -52,7 +53,10 @@ export default function Play() {
 
   const [game, setGame] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [spectating, setSpectating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const copyInputRef = useRef<HTMLInputElement>(null);
   const [confirmResign, setConfirmResign] = useState(false);
   const [drawOffered, setDrawOffered] = useState(false);
   const [clocks, setClocks] = useState<{ w: number | null; b: number | null }>({
@@ -73,42 +77,104 @@ export default function Play() {
     if (s.drawOffer === null) setDrawOffered(false);
   }, []);
 
-  // Join (invite-link flow) then start polling
+  // Join (invite-link flow), then subscribe to the SSE live channel.
+  // If the socket drops or SSE is unsupported, fall back to 3s polling.
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let es: EventSource | null = null;
 
-    async function poll() {
-      try {
-        const s = await gamesApi.state(code);
-        if (cancelled) return;
-        // Not seated yet and a seat is open → auto-join via invite link
-        if (!s.yourColor && (!s.whiteJoined || !s.blackJoined) && s.status !== "finished") {
-          await gamesApi.join(code);
-          const s2 = await gamesApi.state(code);
-          if (cancelled) return;
-          applyState(s2);
-        } else {
-          applyState(s);
+    async function joinIfSeatFree(s: GameState): Promise<GameState> {
+      if (!s.yourColor && s.status !== "finished") {
+        if (!s.whiteJoined || !s.blackJoined) {
+          try {
+            await gamesApi.join(code);
+            return await gamesApi.state(code);
+          } catch (err) {
+            // Seat was taken between poll and join → spectate, don't error out.
+            if (err instanceof ApiError && err.status !== 404) {
+              setSpectating(true);
+              return s;
+            }
+            throw err;
+          }
         }
+        // Both seats occupied and we're not one of them → spectator.
+        setSpectating(true);
+      }
+      return s;
+    }
+
+    function startPollingFallback() {
+      if (cancelled) return;
+      const poll = async () => {
+        try {
+          const s = await gamesApi.state(code);
+          if (cancelled) return;
+          applyState(s);
+          setError(null);
+        } catch (err) {
+          if (cancelled) return;
+          if (err instanceof ApiError && err.status === 404) {
+            setError("Game not found — check the invite code.");
+            return; // stop polling
+          }
+        }
+        if (!cancelled && gameRef.current?.status !== "finished") {
+          timer = setTimeout(poll, FALLBACK_POLL_MS);
+        }
+      };
+      poll();
+    }
+
+    function subscribe() {
+      if (cancelled || typeof EventSource === "undefined") {
+        startPollingFallback();
+        return;
+      }
+      es = new EventSource(gamesApi.eventsUrl(code), { withCredentials: true });
+      es.addEventListener("state", (ev) => {
+        if (cancelled) return;
+        try {
+          applyState(JSON.parse((ev as MessageEvent).data) as GameState);
+          setError(null);
+        } catch {
+          /* malformed frame — next event will fix it */
+        }
+      });
+      es.onerror = () => {
+        // Socket dropped → close and fall back to polling.
+        es?.close();
+        es = null;
+        startPollingFallback();
+      };
+    }
+
+    async function boot() {
+      try {
+        const s0 = await gamesApi.state(code);
+        if (cancelled) return;
+        const s = await joinIfSeatFree(s0);
+        if (cancelled) return;
+        applyState(s);
         setError(null);
+        if (s.status !== "finished") subscribe();
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 404) {
           setError("Game not found — check the invite code.");
-          return; // stop polling
+          return;
         }
-        // transient error → keep polling
-      }
-      if (!cancelled && gameRef.current?.status !== "finished") {
-        timer = setTimeout(poll, POLL_MS);
+        // Transient network error → retry via polling fallback.
+        startPollingFallback();
       }
     }
 
-    poll();
+    boot();
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      es?.close();
     };
   }, [code, applyState]);
 
@@ -191,20 +257,37 @@ export default function Play() {
     return true;
   };
 
+  const inviteUrl = `${window.location.origin}/play/${code}`;
+
   const copyInvite = async () => {
-    const url = `${window.location.origin}/play/${code}`;
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(inviteUrl);
+      ok = true;
     } catch {
-      const ta = document.createElement("textarea");
-      ta.value = url;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      ta.remove();
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = inviteUrl;
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand("copy");
+        ta.remove();
+      } catch {
+        ok = false;
+      }
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (ok) {
+      setCopyFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      // Clipboard blocked (insecure context) → select the URL for manual copy.
+      setCopyFailed(true);
+      requestAnimationFrame(() => {
+        copyInputRef.current?.focus();
+        copyInputRef.current?.select();
+      });
+    }
   };
 
   const doResign = async () => {
@@ -257,9 +340,7 @@ export default function Play() {
     return (
       <div className="grain min-h-screen bg-cream">
         <Navbar />
-        <div className="flex min-h-screen items-center justify-center">
-          <Spinner label="Joining game…" />
-        </div>
+        <PlaySkeleton />
       </div>
     );
   }
@@ -298,6 +379,15 @@ export default function Play() {
           </h1>
         </div>
 
+        {/* Spectator banner */}
+        {spectating && !finished && (
+          <div className="mx-auto mb-8 max-w-xl rounded-2xl border border-terracotta/30 bg-terracotta/10 p-4 text-center">
+            <p className="text-sm font-semibold text-ink">
+              This game already has two players — you're spectating.
+            </p>
+          </div>
+        )}
+
         {/* Waiting banner with invite link */}
         {waiting && !finished && (
           <div
@@ -310,6 +400,20 @@ export default function Play() {
             <p className="font-display text-3xl font-semibold tracking-[0.3em] text-forest">
               {code}
             </p>
+            {/* Full URL — long-press to copy on mobile; doubles as the manual-copy
+                fallback when the Clipboard API is blocked (insecure contexts). */}
+            <input
+              ref={copyInputRef}
+              readOnly
+              value={inviteUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="w-full max-w-sm select-all rounded-xl border border-parchment bg-white/80 px-3 py-2 text-center font-mono text-xs text-ink-soft outline-none focus:border-forest"
+            />
+            {copyFailed && (
+              <p className="text-xs font-semibold text-terracotta">
+                Press Ctrl+C to copy — the link is selected above.
+              </p>
+            )}
             <button
               onClick={copyInvite}
               className="inline-flex items-center gap-2 rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-cream transition-all hover:bg-forest-deep active:scale-[0.98]"

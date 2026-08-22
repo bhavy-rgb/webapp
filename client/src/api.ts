@@ -1,16 +1,5 @@
-const TOKEN_KEY = "chessify_token";
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-}
+// Auth now rides an httpOnly cookie set by the server — the JWT never
+// touches localStorage or page JavaScript. All requests send credentials.
 
 // Anonymous guest identity — lets people play 1v1 via an invite link
 // without creating an account. Stable per browser via localStorage.
@@ -37,17 +26,17 @@ export class ApiError extends Error {
 
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: unknown } = {}
+  options: { method?: string; body?: unknown; signal?: AbortSignal } = {}
 ): Promise<T> {
-  const token = getToken();
   const res = await fetch(`/api${path}`, {
     method: options.method ?? "GET",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       "X-Guest-Id": getGuestId(),
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    signal: options.signal,
   });
 
   const data = (await res.json().catch(() => ({}))) as { message?: string };
@@ -65,7 +54,6 @@ export interface PublicUser {
 }
 
 export interface AuthResponse {
-  token: string;
   user: PublicUser;
 }
 
@@ -80,7 +68,8 @@ export const authApi = {
       method: "POST",
       body: { identifier, password },
     }),
-  me: () => api<{ user: PublicUser }>("/auth/me"),
+  me: (signal?: AbortSignal) => api<{ user: PublicUser }>("/auth/me", { signal }),
+  logout: () => api<{ ok: boolean }>("/auth/logout", { method: "POST", body: {} }),
 };
 
 // ---------------------------------------------------------------------------
@@ -137,6 +126,10 @@ export const gamesApi = {
   join: (code: string) =>
     api<CreateGameResponse>(`/games/${code}/join`, { method: "POST", body: {} }),
   state: (code: string) => api<GameState>(`/games/${code}/state`),
+  /** SSE live channel URL. EventSource can't set headers, so the guest id
+   *  travels as a query param; the auth cookie is sent automatically. */
+  eventsUrl: (code: string) =>
+    `/api/games/${code}/events?guest=${encodeURIComponent(getGuestId())}`,
   move: (code: string, move: { from: string; to: string; promotion?: string }, moveIndex: number) =>
     api<MoveResponse>(`/games/${code}/move`, { method: "POST", body: { move, moveIndex } }),
   resign: (code: string) =>

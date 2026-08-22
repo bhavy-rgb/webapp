@@ -11,6 +11,7 @@
 import { Chess } from "chess.js";
 import { Router, type Response } from "express";
 import {
+  gameEvents,
   gameStore,
   liveClocks,
   playerColor,
@@ -172,6 +173,51 @@ router.get("/:code/state", (req: PlayerRequest, res: Response) => {
   return res.json({
     ...publicState(g, whiteMs, blackMs),
     yourColor: playerColor(g, req.playerId!),
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/games/:code/events — Server-Sent Events live channel.
+// Pushes full game state on every change (move, join, resign, draw, flag).
+// Falls back to a keep-alive heartbeat so proxies don't cut the stream.
+// ---------------------------------------------------------------------------
+router.get("/:code/events", (req: PlayerRequest, res: Response) => {
+  const code = req.params.code.toUpperCase();
+  if (!gameStore.find(code)) {
+    return res.status(404).json({ message: "Game not found" });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const send = () => {
+    let g = gameStore.find(code);
+    if (!g) return;
+    const now = Date.now();
+    const { whiteMs, blackMs, flagged } = liveClocks(g, now);
+    if (flagged && g.status === "active") {
+      g = endOnFlag(g, whiteMs!, blackMs!, flagged);
+    }
+    const state = {
+      ...publicState(g, whiteMs, blackMs),
+      yourColor: playerColor(g, req.playerId!),
+    };
+    res.write(`event: state\ndata: ${JSON.stringify(state)}\n\n`);
+  };
+
+  const onChange = (changed: string) => {
+    if (changed === code) send();
+  };
+
+  gameEvents.on("change", onChange);
+  const heartbeat = setInterval(() => res.write(":hb\n\n"), 20000);
+  send(); // initial snapshot
+
+  req.on("close", () => {
+    gameEvents.off("change", onChange);
+    clearInterval(heartbeat);
   });
 });
 

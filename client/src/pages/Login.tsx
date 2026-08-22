@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { KeyRound, LogIn, Sparkles, UserPlus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -10,6 +10,10 @@ type Mode = "login" | "signup";
 export default function Login() {
   const { user, loading, login, signup } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Where the user was heading before being redirected here (invite links etc.)
+  const from =
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/home";
 
   const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
@@ -21,7 +25,7 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && user) {
-    return <Navigate to="/home" replace />;
+    return <Navigate to={from} replace />;
   }
 
   const switchMode = (next: Mode) => {
@@ -55,7 +59,7 @@ export default function Login() {
       } else {
         await signup(username.trim(), email.trim().toLowerCase(), password);
       }
-      navigate("/home");
+      navigate(from, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

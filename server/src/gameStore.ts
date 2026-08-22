@@ -5,6 +5,7 @@
  * per-color seats, move list, clocks with increment, draw offers, results.
  * Identity is now the authenticated user (JWT) instead of anonymous tokens.
  */
+import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +60,13 @@ function writeDb(db: GamesDb) {
   fs.writeFileSync(GAMES_FILE, JSON.stringify(db, null, 2), "utf-8");
 }
 
+/**
+ * Change notifications for live game channels (SSE). Emits the game code
+ * whenever a game is created or updated so subscribers can push fresh state.
+ */
+export const gameEvents = new EventEmitter();
+gameEvents.setMaxListeners(0); // one listener per connected spectator/player
+
 export function randomCode(len = 6): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let out = "";
@@ -74,6 +82,7 @@ export const gameStore = {
     const db = readDb();
     db.games.push(game);
     writeDb(db);
+    gameEvents.emit("change", game.code);
     return game;
   },
   update(code: string, patch: Partial<Game>): Game | undefined {
@@ -82,6 +91,7 @@ export const gameStore = {
     if (idx === -1) return undefined;
     db.games[idx] = { ...db.games[idx], ...patch };
     writeDb(db);
+    gameEvents.emit("change", db.games[idx].code);
     return db.games[idx];
   },
   freshCode(): string {

@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, Swords, Users } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { ApiError, gamesApi } from "@/api";
+import { Skeleton } from "@/components/Skeleton";
 
 const TIME_CONTROLS = [
   { label: "3+0", min: 3, inc: 0 },
@@ -262,6 +263,13 @@ export default function Lobby() {
                 >
                   {busy ? "Joining…" : "Join game"}
                 </button>
+              </div>
+            )}
+
+            {busy && (
+              <div className="mt-4 space-y-2" aria-hidden>
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
               </div>
             )}
 

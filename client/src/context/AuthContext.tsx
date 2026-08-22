@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { authApi, clearToken, getToken, setToken, type PublicUser } from "@/api";
+import { authApi, type PublicUser } from "@/api";
 
 interface AuthContextValue {
   user: PublicUser | null;
@@ -19,36 +19,42 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+/** How long we wait for the session-restore call before treating the
+ *  visitor as logged out — prevents an unreachable API from hanging
+ *  the whole app on a spinner forever. */
+const ME_TIMEOUT_MS = 5000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ME_TIMEOUT_MS);
+
     async function restore() {
-      const token = getToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
       try {
-        const { user } = await authApi.me();
+        // Session lives in an httpOnly cookie — just ask the server who we are.
+        const { user } = await authApi.me(controller.signal);
         if (!cancelled) setUser(user);
       } catch {
-        clearToken();
+        // 401 (no session), network error or timeout → treat as logged out.
       } finally {
+        clearTimeout(timeout);
         if (!cancelled) setLoading(false);
       }
     }
     restore();
     return () => {
       cancelled = true;
+      controller.abort();
+      clearTimeout(timeout);
     };
   }, []);
 
   const login = useCallback(async (identifier: string, password: string) => {
     const res = await authApi.login(identifier, password);
-    setToken(res.token);
     setUser(res.user);
     return res.user;
   }, []);
@@ -56,7 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = useCallback(
     async (username: string, email: string, password: string) => {
       const res = await authApi.signup(username, email, password);
-      setToken(res.token);
       setUser(res.user);
       return res.user;
     },
@@ -64,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
-    clearToken();
     setUser(null);
+    authApi.logout().catch(() => {}); // clear httpOnly cookie server-side
   }, []);
 
   const value = useMemo(
