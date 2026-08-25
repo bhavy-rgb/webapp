@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import authRouter from "./routes/auth.js";
+import botGamesRouter from "./routes/botGames.js";
 import gamesRouter from "./routes/games.js";
 
 dotenv.config();
@@ -50,6 +51,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/games", gamesRouter);
+app.use("/api/bot-games", botGamesRouter);
 
 app.use("/api", (_req, res) => {
   res.status(404).json({ message: "Not found" });
