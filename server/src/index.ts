@@ -2,10 +2,15 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import { installConsoleCapture } from "./consoleLogs.js";
+import { requireAdmin } from "./middleware/auth.js";
+import adminRouter from "./routes/admin.js";
 import authRouter from "./routes/auth.js";
+import botGamesRouter from "./routes/botGames.js";
 import gamesRouter from "./routes/games.js";
 
 dotenv.config();
+installConsoleCapture(); // ring-buffer console capture for the admin panel
 
 const app = express();
 // Use a Chessify-specific var so an ambient PORT in the shell can't hijack the
@@ -19,6 +24,9 @@ app.use(
   })
 );
 app.use(express.json());
+// navigator.sendBeacon posts JSON with a text/plain content type — accept it
+// so abandoned bot games can still be recorded on tab close.
+app.use(express.text({ type: "text/plain", limit: "200kb" }));
 app.use(cookieParser());
 
 // --- Security headers -------------------------------------------------------
@@ -50,6 +58,8 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/games", gamesRouter);
+app.use("/api/bot-games", botGamesRouter);
+app.use("/api/admin", requireAdmin, adminRouter);
 
 app.use("/api", (_req, res) => {
   res.status(404).json({ message: "Not found" });

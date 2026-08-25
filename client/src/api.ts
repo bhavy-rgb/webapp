@@ -51,6 +51,7 @@ export interface PublicUser {
   username: string;
   email: string;
   createdAt: string;
+  role: "admin" | "user";
 }
 
 export interface AuthResponse {
@@ -139,4 +140,69 @@ export const gamesApi = {
       method: "POST",
       body: { action },
     }),
+};
+
+// ---------------------------------------------------------------------------
+// Admin panel (requires an admin account)
+// ---------------------------------------------------------------------------
+
+export interface AdminOverview {
+  users: { total: number; admins: number; last24h: number };
+  games: { total: number; waiting: number; active: number; finished: number; last24h: number };
+  audit: { total: number };
+}
+
+export interface AdminGameRow {
+  code: string;
+  status: "waiting" | "active" | "finished";
+  result: string | null;
+  white: string | null;
+  black: string | null;
+  moveCount: number;
+  timeMinutes: number;
+  incrementSeconds: number;
+  createdAt: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  ts: string;
+  actorId: string;
+  actorName: string;
+  action: string;
+  target: string | null;
+  ip: string | null;
+  ok: boolean;
+  meta?: Record<string, unknown>;
+}
+
+export interface ConsoleEntry {
+  ts: string;
+  level: "log" | "info" | "warn" | "error";
+  message: string;
+}
+
+export const adminApi = {
+  overview: () => api<AdminOverview>("/admin/overview"),
+  users: () => api<{ users: PublicUser[] }>("/admin/users"),
+  setRole: (id: string, role: "admin" | "user") =>
+    api<{ user: PublicUser }>(`/admin/users/${id}/role`, { method: "PATCH", body: { role } }),
+  deleteUser: (id: string) => api<{ ok: boolean }>(`/admin/users/${id}`, { method: "DELETE" }),
+  games: () => api<{ games: AdminGameRow[] }>("/admin/games"),
+  deleteGame: (code: string) =>
+    api<{ ok: boolean }>(`/admin/games/${code}`, { method: "DELETE" }),
+  audit: (opts: { limit?: number; action?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.limit) q.set("limit", String(opts.limit));
+    if (opts.action) q.set("action", opts.action);
+    const qs = q.toString();
+    return api<{ entries: AuditEntry[] }>(`/admin/audit${qs ? `?${qs}` : ""}`);
+  },
+  console: (opts: { limit?: number; level?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.limit) q.set("limit", String(opts.limit));
+    if (opts.level) q.set("level", opts.level);
+    const qs = q.toString();
+    return api<{ logs: ConsoleEntry[] }>(`/admin/console${qs ? `?${qs}` : ""}`);
+  },
 };

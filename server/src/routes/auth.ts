@@ -13,6 +13,7 @@ import {
   signToken,
   type AuthRequest,
 } from "../middleware/auth.js";
+import { auditLog, requestIp } from "../auditLog.js";
 
 const router = Router();
 
@@ -60,13 +61,28 @@ router.post("/signup", authLimiter, async (req, res) => {
 
   try {
     const passwordHash = await bcrypt.hash(password, 10);
+    // Bootstrap admin: if the ADMIN_USERNAME env var matches this username,
+    // the account is created with admin rights (further admins are promoted
+    // from the admin panel).
+    const isAdmin =
+      !!process.env.ADMIN_USERNAME &&
+      cleanUsername.toLowerCase() === process.env.ADMIN_USERNAME.toLowerCase();
     const user = store.create({
       username: cleanUsername,
       email: cleanEmail,
       passwordHash,
+      isAdmin,
     });
 
     setAuthCookie(res, signToken(user));
+    auditLog.record({
+      actorId: user.id,
+      actorName: user.username,
+      action: "auth.signup",
+      target: null,
+      ip: requestIp(req),
+      ok: true,
+    });
     return res.status(201).json({ user: toPublicUser(user) });
   } catch (err) {
     console.error("signup error", err);
@@ -87,11 +103,29 @@ router.post("/login", authLimiter, async (req, res) => {
   const user = byUsername ?? byEmail;
 
   if (!user) {
+    auditLog.record({
+      actorId: "anonymous",
+      actorName: identifier.trim().slice(0, 40),
+      action: "auth.login",
+      target: null,
+      ip: requestIp(req),
+      ok: false,
+      meta: { reason: "unknown-user" },
+    });
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
   try {
     const ok = await bcrypt.compare(password, user.passwordHash);
+    auditLog.record({
+      actorId: user.id,
+      actorName: user.username,
+      action: "auth.login",
+      target: null,
+      ip: requestIp(req),
+      ok,
+      meta: ok ? undefined : { reason: "bad-password" },
+    });
     if (!ok) {
       return res.status(401).json({ message: "Invalid credentials" });
     }

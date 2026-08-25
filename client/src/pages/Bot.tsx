@@ -5,6 +5,7 @@ import { RotateCcw, Cpu, Flag } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { engine, LEVELS, type LevelId } from "@/engine";
+import { useMoveHints } from "@/hooks/useMoveHints";
 
 type Status = "playing" | "check" | "checkmate" | "draw" | "resigned";
 type PlayerColor = "w" | "b";
@@ -91,7 +92,10 @@ export default function Bot() {
     }
   };
 
+  const hints = useMoveHints(fen);
+
   const onPieceDrop = (source: string, target: string): boolean => {
+    hints.clear();
     if (status === "checkmate" || status === "draw" || status === "resigned") return false;
     const g = gameRef.current;
     if (g.turn() !== playerColor || thinking) return false;
@@ -194,6 +198,9 @@ export default function Bot() {
                 <Chessboard
                   position={fen}
                   onPieceDrop={onPieceDrop}
+                  onPieceDragBegin={hints.onPieceDragBegin}
+                  onPieceDragEnd={hints.onPieceDragEnd}
+                  customSquareStyles={hints.customSquareStyles}
                   boardOrientation={playerColor === "w" ? "white" : "black"}
                   areArrowsAllowed={false}
                   boardWidth={Math.min(boardWidth, 620)}
