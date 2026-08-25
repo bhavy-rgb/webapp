@@ -4,6 +4,7 @@ import { Chessboard } from "react-chessboard";
 import { RotateCcw, Cpu, Flag } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
+import { botGamesApi, getGuestId } from "@/api";
 import { engine, LEVELS, type LevelId } from "@/engine";
 
 type Status = "playing" | "check" | "checkmate" | "draw" | "resigned";
@@ -28,6 +29,10 @@ export default function Bot() {
   const [evalCp, setEvalCp] = useState(0); // centipawns, white perspective
   const [engineInfo, setEngineInfo] = useState<string | null>(null);
   const requestSeq = useRef(0);
+  // Per-move eval snapshots, sent to the server when the game ends.
+  const evalHistoryRef = useRef<Array<{ fen: string; evalCp: number; moveNumber: number }>>([]);
+  // Guards against double-submitting the same game (e.g. resign + unload).
+  const submittedRef = useRef(false);
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(480);
 
@@ -43,14 +48,72 @@ export default function Bot() {
     else if (g.isDraw() || g.isStalemate() || g.isThreefoldRepetition()) setStatus("draw");
     else if (g.isCheck()) setStatus("check");
     else setStatus("playing");
+    if (g.isCheckmate() || g.isDraw() || g.isStalemate() || g.isThreefoldRepetition()) {
+      void submitGameToServer();
+    }
   };
 
   const updateEval = (currentFen: string, turn: PlayerColor) => {
     engine
       .evaluate(currentFen)
-      .then((cp) => setEvalCp(turn === "w" ? cp : -cp))
+      .then((cp) => {
+        setEvalCp(turn === "w" ? cp : -cp);
+        evalHistoryRef.current.push({
+          fen: currentFen,
+          evalCp: turn === "w" ? cp : -cp,
+          moveNumber: gameRef.current.history().length,
+        });
+      })
       .catch(() => {});
   };
+
+  /**
+   * Persist the finished game to the server for later analysis / training.
+   * Pass `overrideResult` (e.g. "resign:b") when the result can't be derived
+   * from the position itself; otherwise it's auto-detected from game state.
+   */
+  async function submitGameToServer(overrideResult?: string) {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    try {
+      const g = gameRef.current;
+      const verboseMoves = g.history({ verbose: true });
+      const moves = verboseMoves.map((m) => ({
+        from: m.from,
+        to: m.to,
+        san: m.san,
+        promotion: m.promotion ?? null,
+      }));
+      const finalFen = g.fen();
+
+      let result = overrideResult ?? "abandoned";
+      if (!overrideResult) {
+        if (g.isCheckmate()) {
+          const winner = g.turn() === "w" ? "b" : "w"; // side to move is mated
+          result = `checkmate:${winner}`;
+        } else if (g.isStalemate()) {
+          result = "draw:stalemate";
+        } else if (g.isInsufficientMaterial()) {
+          result = "draw:insufficient";
+        } else if (g.isThreefoldRepetition()) {
+          result = "draw:repetition";
+        } else if (g.isDraw()) {
+          result = "draw:fifty-move";
+        }
+      }
+
+      await botGamesApi.submit({
+        playerColor,
+        difficultyLevel: level,
+        moves,
+        finalFen,
+        result,
+        evalHistory: evalHistoryRef.current,
+      });
+    } catch (err) {
+      console.error("Failed to submit bot game:", err);
+    }
+  }
 
   const botMove = async () => {
     const g = gameRef.current;
@@ -124,6 +187,8 @@ export default function Bot() {
   const startNewGame = (color: PlayerColor = playerColor) => {
     requestSeq.current++;
     gameRef.current = new Chess();
+    evalHistoryRef.current = [];
+    submittedRef.current = false;
     setHistory([]);
     setThinking(false);
     setEvalCp(0);
@@ -142,7 +207,41 @@ export default function Bot() {
     requestSeq.current++;
     setThinking(false);
     setStatus("resigned");
+    void submitGameToServer(`resign:${playerColor === "w" ? "b" : "w"}`);
   };
+
+  // Best-effort save of abandoned games when the tab closes mid-game.
+  useEffect(() => {
+    const handler = () => {
+      const g = gameRef.current;
+      if (g.history().length > 0 && !g.isGameOver() && !submittedRef.current) {
+        const moves = g
+          .history({ verbose: true })
+          .map((m) => ({ from: m.from, to: m.to, san: m.san, promotion: m.promotion ?? null }));
+        // sendBeacon can't set headers, so guest identity rides the query
+        // string (identifyPlayer accepts ?guest=) and the auth cookie is
+        // attached automatically. Blob carries the JSON content type.
+        navigator.sendBeacon(
+          `/api/bot-games?guest=${encodeURIComponent(getGuestId())}`,
+          new Blob(
+            [
+              JSON.stringify({
+                playerColor,
+                difficultyLevel: level,
+                moves,
+                finalFen: g.fen(),
+                result: "abandoned",
+                evalHistory: evalHistoryRef.current,
+              }),
+            ],
+            { type: "application/json" }
+          )
+        );
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [playerColor, level]);
 
   const lastMove = history[history.length - 1];
 
