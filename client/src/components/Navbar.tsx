@@ -3,13 +3,6 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-const links = [
-  { to: "/home", label: "Home" },
-  { to: "/lobby", label: "Lobby" },
-  { to: "/training", label: "Training" },
-  { to: "/bot", label: "Play Bot" },
-];
-
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
