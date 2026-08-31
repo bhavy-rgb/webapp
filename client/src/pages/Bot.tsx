@@ -5,6 +5,8 @@ import { RotateCcw, Cpu, Flag } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { engine, LEVELS, type LevelId } from "@/engine";
+import { botGamesApi, getGuestId } from "@/api";
+import { useMoveHints } from "@/hooks/useMoveHints";
 
 type Status = "playing" | "check" | "checkmate" | "draw" | "resigned";
 type PlayerColor = "w" | "b";
@@ -30,6 +32,10 @@ export default function Bot() {
   const requestSeq = useRef(0);
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(480);
+  // Engine evaluation after each position — submitted with the game so the
+  // admin panel can build training sets from real play.
+  const evalHistoryRef = useRef<Array<{ fen: string; evalCp: number; moveNumber: number }>>([]);
+  const submittedRef = useRef(false); // guard against double submission
 
   useEffect(() => {
     engine.warmUp();
@@ -43,14 +49,69 @@ export default function Bot() {
     else if (g.isDraw() || g.isStalemate() || g.isThreefoldRepetition()) setStatus("draw");
     else if (g.isCheck()) setStatus("check");
     else setStatus("playing");
+    // Game just ended on the board → record it for the admin panel.
+    if (g.isCheckmate() || g.isDraw() || g.isStalemate() || g.isThreefoldRepetition()) {
+      void submitGameToServer();
+    }
   };
 
   const updateEval = (currentFen: string, turn: PlayerColor) => {
     engine
       .evaluate(currentFen)
-      .then((cp) => setEvalCp(turn === "w" ? cp : -cp))
+      .then((cp) => {
+        setEvalCp(turn === "w" ? cp : -cp);
+        evalHistoryRef.current.push({
+          fen: currentFen,
+          evalCp: turn === "w" ? cp : -cp,
+          moveNumber: gameRef.current.history().length,
+        });
+      })
       .catch(() => {});
   };
+
+  async function submitGameToServer(overrideResult?: string) {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    try {
+      const g = gameRef.current;
+      const verboseMoves = g.history({ verbose: true });
+      const moves = verboseMoves.map((m) => ({
+        from: m.from,
+        to: m.to,
+        san: m.san,
+        promotion: m.promotion ?? null,
+      }));
+      const finalFen = g.fen();
+
+      let result = overrideResult ?? "abandoned";
+      if (!overrideResult) {
+        if (g.isCheckmate()) {
+          // Side to move is checkmated → the other side wins.
+          const winner = g.turn() === "w" ? "b" : "w";
+          result = `checkmate:${winner}`;
+        } else if (g.isStalemate()) {
+          result = "draw:stalemate";
+        } else if (g.isInsufficientMaterial()) {
+          result = "draw:insufficient";
+        } else if (g.isThreefoldRepetition()) {
+          result = "draw:repetition";
+        } else if (g.isDraw()) {
+          result = "draw:fifty-move";
+        }
+      }
+
+      await botGamesApi.submit({
+        playerColor,
+        difficultyLevel: level,
+        moves,
+        finalFen,
+        result,
+        evalHistory: evalHistoryRef.current,
+      });
+    } catch (err) {
+      console.error("Failed to submit bot game:", err);
+    }
+  }
 
   const botMove = async () => {
     const g = gameRef.current;
@@ -91,7 +152,10 @@ export default function Bot() {
     }
   };
 
+  const hints = useMoveHints(fen);
+
   const onPieceDrop = (source: string, target: string): boolean => {
+    hints.clear();
     if (status === "checkmate" || status === "draw" || status === "resigned") return false;
     const g = gameRef.current;
     if (g.turn() !== playerColor || thinking) return false;
@@ -124,6 +188,8 @@ export default function Bot() {
   const startNewGame = (color: PlayerColor = playerColor) => {
     requestSeq.current++;
     gameRef.current = new Chess();
+    evalHistoryRef.current = [];
+    submittedRef.current = false;
     setHistory([]);
     setThinking(false);
     setEvalCp(0);
@@ -142,7 +208,36 @@ export default function Bot() {
     requestSeq.current++;
     setThinking(false);
     setStatus("resigned");
+    // The bot wins when you resign.
+    void submitGameToServer(`resign:${playerColor === "w" ? "b" : "w"}`);
   };
+
+  // Record abandoned games on tab close — sendBeacon survives page unload.
+  useEffect(() => {
+    const handler = () => {
+      const g = gameRef.current;
+      if (g.history().length > 0 && !g.isGameOver() && !submittedRef.current) {
+        const moves = g
+          .history({ verbose: true })
+          .map((m) => ({ from: m.from, to: m.to, san: m.san, promotion: m.promotion ?? null }));
+        // sendBeacon can't set headers — the guest id rides a query param
+        // (the auth cookie is attached automatically for signed-in users).
+        navigator.sendBeacon(
+          `/api/bot-games?guest=${encodeURIComponent(getGuestId())}`,
+          JSON.stringify({
+            playerColor,
+            difficultyLevel: level,
+            moves,
+            finalFen: g.fen(),
+            result: "abandoned",
+            evalHistory: evalHistoryRef.current,
+          })
+        );
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [playerColor, level]);
 
   const lastMove = history[history.length - 1];
 
@@ -194,6 +289,9 @@ export default function Bot() {
                 <Chessboard
                   position={fen}
                   onPieceDrop={onPieceDrop}
+                  onPieceDragBegin={hints.onPieceDragBegin}
+                  onPieceDragEnd={hints.onPieceDragEnd}
+                  customSquareStyles={hints.customSquareStyles}
                   boardOrientation={playerColor === "w" ? "white" : "black"}
                   areArrowsAllowed={false}
                   boardWidth={Math.min(boardWidth, 620)}

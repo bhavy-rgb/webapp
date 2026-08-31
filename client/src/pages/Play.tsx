@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 import { PlaySkeleton } from "@/components/Skeleton";
 import { ApiError, gamesApi, type GameState } from "@/api";
 import { useAuth } from "@/context/AuthContext";
+import { useMoveHints } from "@/hooks/useMoveHints";
 
 /** Polling cadence used only when the SSE channel is unavailable. */
 const FALLBACK_POLL_MS = 3000;
@@ -208,7 +209,10 @@ export default function Play() {
   const turn = game ? (game.moves.length % 2 === 0 ? "w" : "b") : "w";
   const isYourTurn = game?.status === "active" && yourColor === turn;
 
+  const hints = useMoveHints(game?.fen ?? new Chess().fen());
+
   const onPieceDrop = (source: string, target: string): boolean => {
+    hints.clear();
     const g = gameRef.current;
     if (!g || g.status !== "active" || !yourColor || turn !== yourColor) return false;
 
@@ -493,6 +497,9 @@ export default function Play() {
               <Chessboard
                 position={game.fen}
                 onPieceDrop={onPieceDrop}
+                onPieceDragBegin={hints.onPieceDragBegin}
+                onPieceDragEnd={hints.onPieceDragEnd}
+                customSquareStyles={hints.customSquareStyles}
                 boardOrientation={orientation}
                 arePiecesDraggable={!!isYourTurn}
                 areArrowsAllowed={false}

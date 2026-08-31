@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-const links = [
+const baseLinks = [
   { to: "/home", label: "Home" },
   { to: "/lobby", label: "Lobby" },
   { to: "/training", label: "Training" },
@@ -16,6 +16,8 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  // Admin link only appears for admin accounts.
+  const links = user?.isAdmin ? [...baseLinks, { to: "/admin", label: "Admin" }] : baseLinks;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16);

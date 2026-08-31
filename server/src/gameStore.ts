@@ -94,6 +94,18 @@ export const gameStore = {
     gameEvents.emit("change", db.games[idx].code);
     return db.games[idx];
   },
+  listAll(): Game[] {
+    return readDb().games;
+  },
+  remove(code: string): boolean {
+    const db = readDb();
+    const before = db.games.length;
+    db.games = db.games.filter((g) => g.code !== code.toUpperCase());
+    if (db.games.length === before) return false;
+    writeDb(db);
+    gameEvents.emit("change", code.toUpperCase());
+    return true;
+  },
   freshCode(): string {
     let code = randomCode();
     for (let i = 0; i < 5; i++) {
