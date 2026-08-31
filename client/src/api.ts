@@ -121,6 +121,82 @@ export interface MoveResponse {
   result: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Bot games (played vs the in-browser WASM engine, persisted server-side)
+// ---------------------------------------------------------------------------
+
+export interface BotGameMove {
+  from: string;
+  to: string;
+  san: string;
+  promotion: string | null;
+}
+
+export interface EvalPoint {
+  fen: string;
+  evalCp: number;
+  moveNumber: number;
+}
+
+export interface BotGame {
+  id: string;
+  userId: string | null;
+  guestId: string | null;
+  playerName: string;
+  playerColor: "w" | "b";
+  /** Engine difficulty, 0 (easiest) to 4 (hardest). */
+  difficultyLevel: number;
+  moves: BotGameMove[];
+  finalFen: string;
+  /** e.g. "checkmate:w" | "resign:b" | "draw:stalemate" | "abandoned" */
+  result: string;
+  evalHistory: EvalPoint[];
+  playedAt: string;
+  createdAt: string;
+}
+
+export interface BotGameSubmit {
+  playerColor: "w" | "b";
+  difficultyLevel: number;
+  moves: BotGameMove[];
+  finalFen: string;
+  result: string;
+  evalHistory?: EvalPoint[];
+  playedAt?: string;
+}
+
+export interface BotGameListParams {
+  page?: number | string;
+  limit?: number | string;
+  playerId?: string;
+  result?: string;
+  difficulty?: number | string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface BotGameListResponse {
+  games: BotGame[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export const botGamesApi = {
+  submit: (data: BotGameSubmit) =>
+    api<{ id: string }>("/bot-games", { method: "POST", body: data }),
+  list: (params: BotGameListParams = {}) => {
+    const search = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => [k, String(v)])
+    );
+    return api<BotGameListResponse>(`/bot-games?${search}`);
+  },
+  detail: (id: string) => api<BotGame>(`/bot-games/${encodeURIComponent(id)}`),
+};
+
 export const gamesApi = {
   create: (opts: { color: "w" | "b" | "random"; timeMinutes: number; incrementSeconds: number }) =>
     api<CreateGameResponse>("/games", { method: "POST", body: opts }),

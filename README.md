@@ -12,7 +12,7 @@ cp .env.example .env   # then edit JWT_SECRET
 npm run dev        # runs server (:3001) + client (:5173) together
 ```
 
-Open http://localhost:5173, create an account, and head to **Training**.
+Open (https://5173-ivt71defsejd9eef82vh9-8f57ffe2.sandbox.novita.ai/lobby), create an account, and head to **Training**.
 
 ## Play a friend (1v1 via link)
 

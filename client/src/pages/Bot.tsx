@@ -4,6 +4,7 @@ import { Chessboard } from "react-chessboard";
 import { RotateCcw, Cpu, Flag } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
+import { botGamesApi, getGuestId } from "@/api";
 import { engine, LEVELS, type LevelId } from "@/engine";
 import { botGamesApi, getGuestId } from "@/api";
 import { useMoveHints } from "@/hooks/useMoveHints";
@@ -30,6 +31,10 @@ export default function Bot() {
   const [evalCp, setEvalCp] = useState(0); // centipawns, white perspective
   const [engineInfo, setEngineInfo] = useState<string | null>(null);
   const requestSeq = useRef(0);
+  // Per-move eval snapshots, sent to the server when the game ends.
+  const evalHistoryRef = useRef<Array<{ fen: string; evalCp: number; moveNumber: number }>>([]);
+  // Guards against double-submitting the same game (e.g. resign + unload).
+  const submittedRef = useRef(false);
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(480);
   // Engine evaluation after each position — submitted with the game so the
