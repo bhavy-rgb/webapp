@@ -19,6 +19,7 @@ import {
   type Game,
 } from "../gameStore.js";
 import { identifyPlayer, type PlayerRequest } from "../middleware/auth.js";
+import { auditLog, requestIp } from "../auditLog.js";
 
 const router = Router();
 
@@ -116,6 +117,15 @@ router.post("/", (req: PlayerRequest, res: Response) => {
     createdAt: new Date().toISOString(),
   });
 
+  auditLog.record({
+    actorId: playerId,
+    actorName: playerName,
+    action: "game.create",
+    target: code,
+    ip: requestIp(req),
+    ok: true,
+    meta: { color, timeMinutes, incrementSeconds },
+  });
   return res.status(201).json({ code, color, timeMinutes, incrementSeconds });
 });
 
@@ -142,6 +152,15 @@ router.post("/:code/join", (req: PlayerRequest, res: Response) => {
   if (g.whiteId && g.blackId) return res.status(400).json({ message: "Game is full" });
 
   const color: Color = g.whiteId ? "b" : "w";
+  auditLog.record({
+    actorId: playerId,
+    actorName: req.playerName!,
+    action: "game.join",
+    target: g.code,
+    ip: requestIp(req),
+    ok: true,
+    meta: { color },
+  });
   gameStore.update(g.code, {
     [color === "w" ? "whiteId" : "blackId"]: playerId,
     [color === "w" ? "whiteName" : "blackName"]: req.playerName!,
@@ -326,6 +345,14 @@ router.post("/:code/resign", (req: PlayerRequest, res: Response) => {
 
   const winner: Color = color === "w" ? "b" : "w";
   gameStore.update(g.code, { status: "finished", result: `resign:${winner}` });
+  auditLog.record({
+    actorId: req.playerId!,
+    actorName: req.playerName!,
+    action: "game.resign",
+    target: g.code,
+    ip: requestIp(req),
+    ok: true,
+  });
   return res.json({ ok: true, result: `resign:${winner}` });
 });
 

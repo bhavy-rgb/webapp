@@ -9,6 +9,7 @@ import Lobby from "@/pages/Lobby";
 import Training from "@/pages/Training";
 import Bot from "@/pages/Bot";
 import Play from "@/pages/Play";
+import Admin from "@/pages/Admin";
 import { Privacy, Terms } from "@/pages/Legal";
 import NotFound from "@/pages/NotFound";
 
@@ -50,6 +51,16 @@ export default function App() {
           <Route path="/bot" element={<Bot />} />
           {/* Playable without an account — invite links work for guests */}
           <Route path="/play/:code" element={<Play />} />
+          {/* Admin panel — the server enforces requireAdmin on every
+              /api/admin route; this is just the client-side gate. */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute isAdmin>
+                <Admin />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/404" element={<NotFound />} />

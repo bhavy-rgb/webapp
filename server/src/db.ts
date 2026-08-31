@@ -20,6 +20,7 @@ export interface User {
   email: string;
   passwordHash: string;
   createdAt: string;
+  isAdmin: boolean;
 }
 
 export interface PublicUser {
@@ -27,13 +28,17 @@ export interface PublicUser {
   username: string;
   email: string;
   createdAt: string;
+  isAdmin: boolean;
 }
 
 export interface UserStore {
   findByUsername(username: string): User | undefined;
   findByEmail(email: string): User | undefined;
   findById(id: string): User | undefined;
-  create(input: { username: string; email: string; passwordHash: string }): User;
+  create(input: { username: string; email: string; passwordHash: string; isAdmin?: boolean }): User;
+  listAll(): User[];
+  setAdmin(id: string, isAdmin: boolean): User | undefined;
+  remove(id: string): boolean;
 }
 
 export function toPublicUser(user: User): PublicUser {
@@ -42,6 +47,7 @@ export function toPublicUser(user: User): PublicUser {
     username: user.username,
     email: user.email,
     createdAt: user.createdAt,
+    isAdmin: user.isAdmin === true,
   };
 }
 
@@ -72,7 +78,7 @@ export const jsonUserStore: UserStore = {
   findById(id: string) {
     return readDb().users.find((u) => u.id === id);
   },
-  create({ username, email, passwordHash }) {
+  create({ username, email, passwordHash, isAdmin = false }) {
     const db = readDb();
     const user: User = {
       id: randomUUID(),
@@ -80,9 +86,29 @@ export const jsonUserStore: UserStore = {
       email,
       passwordHash,
       createdAt: new Date().toISOString(),
+      isAdmin,
     };
     db.users.push(user);
     writeDb(db);
     return user;
+  },
+  listAll() {
+    return readDb().users;
+  },
+  setAdmin(id: string, isAdmin: boolean) {
+    const db = readDb();
+    const user = db.users.find((u) => u.id === id);
+    if (!user) return undefined;
+    user.isAdmin = isAdmin;
+    writeDb(db);
+    return user;
+  },
+  remove(id: string) {
+    const db = readDb();
+    const before = db.users.length;
+    db.users = db.users.filter((u) => u.id !== id);
+    if (db.users.length === before) return false;
+    writeDb(db);
+    return true;
   },
 };

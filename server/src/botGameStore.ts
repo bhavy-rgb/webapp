@@ -1,10 +1,12 @@
 /**
- * Bot game store — file-backed JSON, same pattern as db.ts and gameStore.ts.
+ * Bot game store — file-backed JSON, same pattern as db.ts / gameStore.ts.
  *
- * Bot games are played entirely in the browser (Rust/WASM engine); when a
- * game finishes the client posts the full record here for persistence and
- * later analysis. Supports both authenticated users (userId) and guests
- * (guestId) so no game data is lost.
+ * Records every finished (or abandoned) human-vs-bot game so the admin
+ * panel can analyse play and build engine training sets:
+ *   moves       — full move list (from/to/san/promotion)
+ *   evalHistory — engine evaluation after each position (centipawns,
+ *                 white perspective) → the raw material for training data
+ *   result      — "checkmate:w" | "resign:b" | "draw:*" | "abandoned"
  */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -15,8 +17,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
 const BOT_GAMES_FILE = path.join(DATA_DIR, "botGames.json");
 
-export type Color = "w" | "b";
-
 export interface BotGameMove {
   from: string;
   to: string;
@@ -24,7 +24,7 @@ export interface BotGameMove {
   promotion: string | null;
 }
 
-export interface EvalPoint {
+export interface BotGameEvalEntry {
   fen: string;
   evalCp: number;
   moveNumber: number;
@@ -32,66 +32,28 @@ export interface EvalPoint {
 
 export interface BotGame {
   id: string;
-  /** Authenticated user id, or null for guest games. */
-  userId: string | null;
-  /** Client-generated guest id, or null for authenticated games. */
-  guestId: string | null;
+  userId: string | null; // signed-in account, if any
+  guestId: string | null; // anonymous browser id, if any
   playerName: string;
-  playerColor: Color;
-  /** Engine difficulty, 0 (easiest) to 4 (hardest). */
+  playerColor: "w" | "b";
   difficultyLevel: number;
   moves: BotGameMove[];
   finalFen: string;
-  /** e.g. "checkmate:w" | "resign:b" | "draw:stalemate" | "abandoned" */
   result: string;
-  evalHistory: EvalPoint[];
-  /** When the game was played (client-reported), ISO string. */
+  evalHistory: BotGameEvalEntry[];
   playedAt: string;
-  /** When the record was stored, ISO string. */
   createdAt: string;
 }
 
-export interface BotGameCreateInput {
-  userId: string | null;
-  guestId: string | null;
-  playerName: string;
-  playerColor: Color;
-  difficultyLevel: number;
-  moves: BotGameMove[];
-  finalFen: string;
-  result: string;
-  evalHistory: EvalPoint[];
-  playedAt: string;
-}
-
-export interface BotGameListFilters {
-  /** Matches either userId or guestId. */
-  playerId?: string;
-  result?: string;
-  difficulty?: number;
-  /** ISO date (inclusive lower bound on playedAt). */
-  startDate?: string;
-  /** ISO date (inclusive upper bound on playedAt). */
-  endDate?: string;
-}
-
-export interface BotGameListResult {
-  games: BotGame[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
 interface BotGamesDb {
-  botGames: BotGame[];
+  games: BotGame[];
 }
 
 function readDb(): BotGamesDb {
   try {
     return JSON.parse(fs.readFileSync(BOT_GAMES_FILE, "utf-8")) as BotGamesDb;
   } catch {
-    return { botGames: [] };
+    return { games: [] };
   }
 }
 
@@ -101,90 +63,58 @@ function writeDb(db: BotGamesDb) {
 }
 
 export const botGameStore = {
-  findAll(): BotGame[] {
-    return readDb().botGames;
-  },
-
-  findById(id: string): BotGame | undefined {
-    return readDb().botGames.find((g) => g.id === id);
-  },
-
-  create(input: BotGameCreateInput): BotGame {
-    const db = readDb();
+  create(input: Omit<BotGame, "id" | "createdAt">): BotGame {
     const game: BotGame = {
+      ...input,
       id: randomUUID(),
-      userId: input.userId,
-      guestId: input.guestId,
-      playerName: input.playerName,
-      playerColor: input.playerColor,
-      difficultyLevel: input.difficultyLevel,
-      moves: input.moves,
-      finalFen: input.finalFen,
-      result: input.result,
-      evalHistory: input.evalHistory,
-      playedAt: input.playedAt,
       createdAt: new Date().toISOString(),
     };
-    db.botGames.push(game);
+    const db = readDb();
+    db.games.push(game);
     writeDb(db);
     return game;
   },
 
-  count(): number {
-    return readDb().botGames.length;
+  find(id: string): BotGame | undefined {
+    return readDb().games.find((g) => g.id === id);
   },
 
-  /**
-   * Paginated listing with optional filters. Results are sorted newest-first
-   * by playedAt. `playerId` matches either the userId or the guestId.
-   */
-  listWithFilters(
-    page: number,
-    limit: number,
-    filters: BotGameListFilters = {}
-  ): BotGameListResult {
-    const { playerId, result, difficulty, startDate, endDate } = filters;
+  listAll(): BotGame[] {
+    return readDb().games;
+  },
 
-    let games = readDb().botGames;
-
-    if (playerId) {
-      games = games.filter((g) => g.userId === playerId || g.guestId === playerId);
+  /** Filtered + paginated listing shared by the player and admin routes. */
+  list(opts: {
+    page?: number;
+    limit?: number;
+    playerId?: string; // matches userId OR guestId
+    result?: string;
+    difficulty?: number;
+    startDate?: string;
+    endDate?: string;
+  }): { games: BotGame[]; total: number; page: number; limit: number } {
+    let games = readDb().games;
+    if (opts.playerId) {
+      games = games.filter((g) => g.userId === opts.playerId || g.guestId === opts.playerId);
     }
-    if (result) {
-      games = games.filter((g) => g.result === result);
+    if (opts.result) games = games.filter((g) => g.result === opts.result);
+    if (opts.difficulty !== undefined && !Number.isNaN(opts.difficulty)) {
+      games = games.filter((g) => g.difficultyLevel === opts.difficulty);
     }
-    if (difficulty !== undefined) {
-      games = games.filter((g) => g.difficultyLevel === difficulty);
+    if (opts.startDate) {
+      const start = new Date(opts.startDate).getTime();
+      if (!Number.isNaN(start)) games = games.filter((g) => new Date(g.playedAt).getTime() >= start);
     }
-    if (startDate) {
-      const start = new Date(startDate).getTime();
-      if (!Number.isNaN(start)) {
-        games = games.filter((g) => new Date(g.playedAt).getTime() >= start);
-      }
+    if (opts.endDate) {
+      const end = new Date(opts.endDate).getTime();
+      if (!Number.isNaN(end)) games = games.filter((g) => new Date(g.playedAt).getTime() <= end);
     }
-    if (endDate) {
-      const end = new Date(endDate).getTime();
-      if (!Number.isNaN(end)) {
-        games = games.filter((g) => new Date(g.playedAt).getTime() <= end);
-      }
-    }
-
-    games = [...games].sort(
-      (a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime()
-    );
-
     const total = games.length;
-    const safeLimit = Math.max(1, Math.min(100, Math.floor(limit) || 20));
-    const totalPages = Math.max(1, Math.ceil(total / safeLimit));
-    const safePage = Math.max(1, Math.min(totalPages, Math.floor(page) || 1));
-    const offset = (safePage - 1) * safeLimit;
-
-    return {
-      games: games.slice(offset, offset + safeLimit),
-      total,
-      page: safePage,
-      limit: safeLimit,
-      totalPages,
-    };
+    const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+    const page = Math.max(1, opts.page ?? 1);
+    const start = (page - 1) * limit;
+    // Newest first
+    const sorted = [...games].reverse();
+    return { games: sorted.slice(start, start + limit), total, page, limit };
   },
 };

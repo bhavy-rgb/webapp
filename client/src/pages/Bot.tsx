@@ -6,6 +6,8 @@ import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { botGamesApi, getGuestId } from "@/api";
 import { engine, LEVELS, type LevelId } from "@/engine";
+import { botGamesApi, getGuestId } from "@/api";
+import { useMoveHints } from "@/hooks/useMoveHints";
 
 type Status = "playing" | "check" | "checkmate" | "draw" | "resigned";
 type PlayerColor = "w" | "b";
@@ -35,6 +37,10 @@ export default function Bot() {
   const submittedRef = useRef(false);
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(480);
+  // Engine evaluation after each position — submitted with the game so the
+  // admin panel can build training sets from real play.
+  const evalHistoryRef = useRef<Array<{ fen: string; evalCp: number; moveNumber: number }>>([]);
+  const submittedRef = useRef(false); // guard against double submission
 
   useEffect(() => {
     engine.warmUp();
@@ -48,6 +54,7 @@ export default function Bot() {
     else if (g.isDraw() || g.isStalemate() || g.isThreefoldRepetition()) setStatus("draw");
     else if (g.isCheck()) setStatus("check");
     else setStatus("playing");
+    // Game just ended on the board → record it for the admin panel.
     if (g.isCheckmate() || g.isDraw() || g.isStalemate() || g.isThreefoldRepetition()) {
       void submitGameToServer();
     }
@@ -67,11 +74,6 @@ export default function Bot() {
       .catch(() => {});
   };
 
-  /**
-   * Persist the finished game to the server for later analysis / training.
-   * Pass `overrideResult` (e.g. "resign:b") when the result can't be derived
-   * from the position itself; otherwise it's auto-detected from game state.
-   */
   async function submitGameToServer(overrideResult?: string) {
     if (submittedRef.current) return;
     submittedRef.current = true;
@@ -89,7 +91,8 @@ export default function Bot() {
       let result = overrideResult ?? "abandoned";
       if (!overrideResult) {
         if (g.isCheckmate()) {
-          const winner = g.turn() === "w" ? "b" : "w"; // side to move is mated
+          // Side to move is checkmated → the other side wins.
+          const winner = g.turn() === "w" ? "b" : "w";
           result = `checkmate:${winner}`;
         } else if (g.isStalemate()) {
           result = "draw:stalemate";
@@ -154,7 +157,10 @@ export default function Bot() {
     }
   };
 
+  const hints = useMoveHints(fen);
+
   const onPieceDrop = (source: string, target: string): boolean => {
+    hints.clear();
     if (status === "checkmate" || status === "draw" || status === "resigned") return false;
     const g = gameRef.current;
     if (g.turn() !== playerColor || thinking) return false;
@@ -207,10 +213,11 @@ export default function Bot() {
     requestSeq.current++;
     setThinking(false);
     setStatus("resigned");
+    // The bot wins when you resign.
     void submitGameToServer(`resign:${playerColor === "w" ? "b" : "w"}`);
   };
 
-  // Best-effort save of abandoned games when the tab closes mid-game.
+  // Record abandoned games on tab close — sendBeacon survives page unload.
   useEffect(() => {
     const handler = () => {
       const g = gameRef.current;
@@ -218,24 +225,18 @@ export default function Bot() {
         const moves = g
           .history({ verbose: true })
           .map((m) => ({ from: m.from, to: m.to, san: m.san, promotion: m.promotion ?? null }));
-        // sendBeacon can't set headers, so guest identity rides the query
-        // string (identifyPlayer accepts ?guest=) and the auth cookie is
-        // attached automatically. Blob carries the JSON content type.
+        // sendBeacon can't set headers — the guest id rides a query param
+        // (the auth cookie is attached automatically for signed-in users).
         navigator.sendBeacon(
           `/api/bot-games?guest=${encodeURIComponent(getGuestId())}`,
-          new Blob(
-            [
-              JSON.stringify({
-                playerColor,
-                difficultyLevel: level,
-                moves,
-                finalFen: g.fen(),
-                result: "abandoned",
-                evalHistory: evalHistoryRef.current,
-              }),
-            ],
-            { type: "application/json" }
-          )
+          JSON.stringify({
+            playerColor,
+            difficultyLevel: level,
+            moves,
+            finalFen: g.fen(),
+            result: "abandoned",
+            evalHistory: evalHistoryRef.current,
+          })
         );
       }
     };
@@ -293,6 +294,9 @@ export default function Bot() {
                 <Chessboard
                   position={fen}
                   onPieceDrop={onPieceDrop}
+                  onPieceDragBegin={hints.onPieceDragBegin}
+                  onPieceDragEnd={hints.onPieceDragEnd}
+                  customSquareStyles={hints.customSquareStyles}
                   boardOrientation={playerColor === "w" ? "white" : "black"}
                   areArrowsAllowed={false}
                   boardWidth={Math.min(boardWidth, 620)}

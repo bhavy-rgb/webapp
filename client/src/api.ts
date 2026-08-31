@@ -51,6 +51,7 @@ export interface PublicUser {
   username: string;
   email: string;
   createdAt: string;
+  isAdmin: boolean;
 }
 
 export interface AuthResponse {
@@ -215,4 +216,145 @@ export const gamesApi = {
       method: "POST",
       body: { action },
     }),
+};
+
+// ---------------------------------------------------------------------------
+// Bot games — recorded human-vs-bot games (users AND guests can submit)
+// ---------------------------------------------------------------------------
+
+export interface BotGameMove {
+  from: string;
+  to: string;
+  san: string;
+  promotion: string | null;
+}
+
+export interface BotGameEvalEntry {
+  fen: string;
+  evalCp: number;
+  moveNumber: number;
+}
+
+export interface BotGame {
+  id: string;
+  userId: string | null;
+  guestId: string | null;
+  playerName: string;
+  playerColor: "w" | "b";
+  difficultyLevel: number;
+  moves: BotGameMove[];
+  finalFen: string;
+  result: string;
+  evalHistory: BotGameEvalEntry[];
+  playedAt: string;
+  createdAt: string;
+}
+
+export interface BotGameSubmitPayload {
+  playerColor: "w" | "b";
+  difficultyLevel: number;
+  moves: BotGameMove[];
+  finalFen: string;
+  result: string;
+  evalHistory: BotGameEvalEntry[];
+}
+
+export interface BotGameListResponse {
+  games: BotGame[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export const botGamesApi = {
+  submit: (data: BotGameSubmitPayload) =>
+    api<{ id: string }>("/bot-games", { method: "POST", body: data }),
+  list: (params: Record<string, string>) =>
+    api<BotGameListResponse>(`/bot-games?${new URLSearchParams(params)}`),
+  detail: (id: string) => api<BotGame>(`/bot-games/${id}`),
+};
+
+// ---------------------------------------------------------------------------
+// Admin panel (requires an admin account)
+// ---------------------------------------------------------------------------
+
+export interface AdminStats {
+  totalUsers: number;
+  totalBotGames: number;
+  total1v1Games: number;
+  botGamesToday: number;
+  resultDistribution: { whiteWins: number; blackWins: number; draws: number; abandoned: number };
+  avgMovesPerBotGame: number;
+  difficultyDistribution: {
+    level0: number;
+    level1: number;
+    level2: number;
+    level3: number;
+    level4: number;
+  };
+  auditEntries: number;
+}
+
+export interface AdminUserRow extends PublicUser {
+  botGameCount: number;
+}
+
+export interface AdminUserListResponse {
+  users: AdminUserRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface Admin1v1GameRow {
+  code: string;
+  status: "waiting" | "active" | "finished";
+  result: string | null;
+  white: string | null;
+  black: string | null;
+  moveCount: number;
+  timeMinutes: number;
+  incrementSeconds: number;
+  createdAt: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  ts: string;
+  actorId: string;
+  actorName: string;
+  action: string;
+  target: string | null;
+  ip: string | null;
+  ok: boolean;
+  meta?: Record<string, unknown>;
+}
+
+export interface ConsoleEntry {
+  ts: string;
+  level: "log" | "info" | "warn" | "error";
+  message: string;
+}
+
+export const adminApi = {
+  stats: () => api<AdminStats>("/admin/stats"),
+  users: (params: Record<string, string>) =>
+    api<AdminUserListResponse>(`/admin/users?${new URLSearchParams(params)}`),
+  toggleAdmin: (id: string, isAdmin: boolean) =>
+    api<{ user: PublicUser }>(`/admin/users/${id}`, { method: "PATCH", body: { isAdmin } }),
+  deleteUser: (id: string) => api<{ ok: boolean }>(`/admin/users/${id}`, { method: "DELETE" }),
+  botGames: (params: Record<string, string>) =>
+    api<BotGameListResponse>(`/admin/bot-games?${new URLSearchParams(params)}`),
+  botGameDetail: (id: string) => api<BotGame>(`/admin/bot-games/${id}`),
+  games1v1: (params: Record<string, string>) =>
+    api<{ games: Admin1v1GameRow[]; total: number; page: number; limit: number }>(
+      `/admin/1v1-games?${new URLSearchParams(params)}`
+    ),
+  generateTrainingSet: () =>
+    api<{ positions: number; file: string }>("/admin/training-set", { method: "POST", body: {} }),
+  exportUrl: (format: "json" | "pgn") => `/api/admin/export?format=${format}`,
+  audit: (params: Record<string, string> = {}) =>
+    api<{ entries: AuditEntry[] }>(`/admin/audit?${new URLSearchParams(params)}`),
+  console: (params: Record<string, string> = {}) =>
+    api<{ logs: ConsoleEntry[] }>(`/admin/console?${new URLSearchParams(params)}`),
 };

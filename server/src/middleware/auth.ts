@@ -11,9 +11,11 @@ export interface AuthRequest extends Request {
 }
 
 export function signToken(user: User): string {
-  return jwt.sign({ sub: user.id, username: user.username }, JWT_SECRET, {
-    expiresIn: "7d",
-  });
+  return jwt.sign(
+    { sub: user.id, username: user.username, isAdmin: user.isAdmin === true },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 }
 
 /** Set the session as an httpOnly cookie (never exposed to page JS). */
@@ -63,6 +65,16 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   }
   req.user = user;
   next();
+}
+
+/** Admin-only gate — authenticates, then checks the isAdmin flag. */
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+  requireAuth(req, res, () => {
+    if (!req.user?.isAdmin) {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    next();
+  });
 }
 
 /**
