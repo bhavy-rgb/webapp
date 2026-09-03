@@ -1,0 +1,25 @@
+{
+  "name": "chessify",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Learn how every chess piece moves — a scroll-animated piece library, training mode, and bot play.",
+  "scripts": {
+    "dev": "concurrently -n server,client -c yellow,cyan \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w client",
+    "check": "npm run check -w server && npm run check -w client",
+    "start": "npm run start -w server"
+  },
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}
