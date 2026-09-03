@@ -6,7 +6,6 @@ import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { botGamesApi, getGuestId } from "@/api";
 import { engine, LEVELS, type LevelId } from "@/engine";
-import { botGamesApi, getGuestId } from "@/api";
 import { useMoveHints } from "@/hooks/useMoveHints";
 
 type Status = "playing" | "check" | "checkmate" | "draw" | "resigned";
@@ -37,10 +36,6 @@ export default function Bot() {
   const submittedRef = useRef(false);
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(480);
-  // Engine evaluation after each position — submitted with the game so the
-  // admin panel can build training sets from real play.
-  const evalHistoryRef = useRef<Array<{ fen: string; evalCp: number; moveNumber: number }>>([]);
-  const submittedRef = useRef(false); // guard against double submission
 
   useEffect(() => {
     engine.warmUp();

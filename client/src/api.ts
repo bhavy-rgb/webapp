@@ -180,7 +180,6 @@ export interface BotGameListResponse {
   total: number;
   page: number;
   limit: number;
-  totalPages: number;
 }
 
 export const botGamesApi = {
@@ -216,62 +215,6 @@ export const gamesApi = {
       method: "POST",
       body: { action },
     }),
-};
-
-// ---------------------------------------------------------------------------
-// Bot games — recorded human-vs-bot games (users AND guests can submit)
-// ---------------------------------------------------------------------------
-
-export interface BotGameMove {
-  from: string;
-  to: string;
-  san: string;
-  promotion: string | null;
-}
-
-export interface BotGameEvalEntry {
-  fen: string;
-  evalCp: number;
-  moveNumber: number;
-}
-
-export interface BotGame {
-  id: string;
-  userId: string | null;
-  guestId: string | null;
-  playerName: string;
-  playerColor: "w" | "b";
-  difficultyLevel: number;
-  moves: BotGameMove[];
-  finalFen: string;
-  result: string;
-  evalHistory: BotGameEvalEntry[];
-  playedAt: string;
-  createdAt: string;
-}
-
-export interface BotGameSubmitPayload {
-  playerColor: "w" | "b";
-  difficultyLevel: number;
-  moves: BotGameMove[];
-  finalFen: string;
-  result: string;
-  evalHistory: BotGameEvalEntry[];
-}
-
-export interface BotGameListResponse {
-  games: BotGame[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-export const botGamesApi = {
-  submit: (data: BotGameSubmitPayload) =>
-    api<{ id: string }>("/bot-games", { method: "POST", body: data }),
-  list: (params: Record<string, string>) =>
-    api<BotGameListResponse>(`/bot-games?${new URLSearchParams(params)}`),
-  detail: (id: string) => api<BotGame>(`/bot-games/${id}`),
 };
 
 // ---------------------------------------------------------------------------
