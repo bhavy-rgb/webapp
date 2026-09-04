@@ -11,6 +11,8 @@ module.exports = {
       env: {
         CHESSIFY_PORT: 3001,
         JWT_SECRET: "sandbox-dev-secret",
+        // Bootstrap admin: the FIRST signup with this username gets isAdmin=true.
+        ADMIN_USERNAME: "admin",
       },
       watch: false,
       instances: 1,
