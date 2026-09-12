@@ -32,13 +32,13 @@ export interface PublicUser {
 }
 
 export interface UserStore {
-  findByUsername(username: string): User | undefined;
-  findByEmail(email: string): User | undefined;
-  findById(id: string): User | undefined;
-  create(input: { username: string; email: string; passwordHash: string; isAdmin?: boolean }): User;
-  listAll(): User[];
-  setAdmin(id: string, isAdmin: boolean): User | undefined;
-  remove(id: string): boolean;
+  findByUsername(username: string): Promise<User | undefined>;
+  findByEmail(email: string): Promise<User | undefined>;
+  findById(id: string): Promise<User | undefined>;
+  create(input: { username: string; email: string; passwordHash: string; isAdmin?: boolean }): Promise<User>;
+  listAll(): Promise<User[]>;
+  setAdmin(id: string, isAdmin: boolean): Promise<User | undefined>;
+  remove(id: string): Promise<boolean>;
 }
 
 export function toPublicUser(user: User): PublicUser {
@@ -69,16 +69,16 @@ function writeDb(db: DbShape) {
 }
 
 export const jsonUserStore: UserStore = {
-  findByUsername(username: string) {
+  async findByUsername(username: string) {
     return readDb().users.find((u) => u.username.toLowerCase() === username.toLowerCase());
   },
-  findByEmail(email: string) {
+  async findByEmail(email: string) {
     return readDb().users.find((u) => u.email.toLowerCase() === email.toLowerCase());
   },
-  findById(id: string) {
+  async findById(id: string) {
     return readDb().users.find((u) => u.id === id);
   },
-  create({ username, email, passwordHash, isAdmin = false }) {
+  async create({ username, email, passwordHash, isAdmin = false }) {
     const db = readDb();
     const user: User = {
       id: randomUUID(),
@@ -92,10 +92,10 @@ export const jsonUserStore: UserStore = {
     writeDb(db);
     return user;
   },
-  listAll() {
+  async listAll() {
     return readDb().users;
   },
-  setAdmin(id: string, isAdmin: boolean) {
+  async setAdmin(id: string, isAdmin: boolean) {
     const db = readDb();
     const user = db.users.find((u) => u.id === id);
     if (!user) return undefined;
@@ -103,7 +103,7 @@ export const jsonUserStore: UserStore = {
     writeDb(db);
     return user;
   },
-  remove(id: string) {
+  async remove(id: string) {
     const db = readDb();
     const before = db.users.length;
     db.users = db.users.filter((u) => u.id !== id);

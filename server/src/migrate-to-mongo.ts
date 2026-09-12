@@ -19,6 +19,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Document } from "mongodb";
 import { closeMongo, db } from "../src/mongo.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,11 +36,11 @@ function readJson<T>(filename: string): T | null {
   }
 }
 
-async function migrateCollection<T extends { id?: string; code?: string }>(
+async function migrateCollection(
   collectionName: string,
   filename: string,
-  records: T[],
-  uniqueKey: "id" | "code",
+  records: Document[],
+  uniqueKey: string,
 ) {
   if (!records || records.length === 0) {
     console.log(`[skip] ${collectionName}: no records in ${filename}`);
@@ -47,13 +48,13 @@ async function migrateCollection<T extends { id?: string; code?: string }>(
   }
 
   const database = await db();
-  const col = database.collection<T>(collectionName);
+  const col = database.collection(collectionName);
 
   let inserted = 0;
   let skipped = 0;
 
   for (const record of records) {
-    const existing = await col.findOne({ [uniqueKey]: record[uniqueKey] } as Record<string, unknown>);
+    const existing = await col.findOne({ [uniqueKey]: record[uniqueKey] });
     if (existing) {
       skipped++;
       continue;

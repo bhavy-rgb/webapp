@@ -52,10 +52,10 @@ router.post("/signup", authLimiter, async (req, res) => {
   const cleanUsername = username.trim();
   const cleanEmail = email.trim().toLowerCase();
 
-  if (store.findByUsername(cleanUsername)) {
+  if (await store.findByUsername(cleanUsername)) {
     return res.status(409).json({ message: "That username is already taken" });
   }
-  if (store.findByEmail(cleanEmail)) {
+  if (await store.findByEmail(cleanEmail)) {
     return res.status(409).json({ message: "An account with that email already exists" });
   }
 
@@ -67,7 +67,7 @@ router.post("/signup", authLimiter, async (req, res) => {
     const isAdmin =
       !!process.env.ADMIN_USERNAME &&
       cleanUsername.toLowerCase() === process.env.ADMIN_USERNAME.toLowerCase();
-    const user = store.create({
+    const user = await store.create({
       username: cleanUsername,
       email: cleanEmail,
       passwordHash,
@@ -98,8 +98,8 @@ router.post("/login", authLimiter, async (req, res) => {
     return res.status(400).json({ message: "Username/email and password are required" });
   }
 
-  const byUsername = store.findByUsername(identifier.trim());
-  const byEmail = store.findByEmail(identifier.trim().toLowerCase());
+  const byUsername = await store.findByUsername(identifier.trim());
+  const byEmail = await store.findByEmail(identifier.trim().toLowerCase());
   const user = byUsername ?? byEmail;
 
   if (!user) {

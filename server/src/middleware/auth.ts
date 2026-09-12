@@ -44,22 +44,22 @@ function extractToken(req: Request): string | null {
   return null;
 }
 
-function verifyUser(token: string): User | null {
+async function verifyUser(token: string): Promise<User | null> {
   try {
     const payload = jwt.verify(token, JWT_SECRET) as { sub: string };
-    return jsonUserStore.findById(payload.sub) ?? null;
+    return (await jsonUserStore.findById(payload.sub)) ?? null;
   } catch {
     return null;
   }
 }
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const token = extractToken(req);
   if (!token) {
     return res.status(401).json({ message: "Missing or malformed auth token" });
   }
 
-  const user = verifyUser(token);
+  const user = await verifyUser(token);
   if (!user) {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
@@ -90,15 +90,22 @@ export interface PlayerRequest extends AuthRequest {
 export function identifyPlayer(req: PlayerRequest, res: Response, next: NextFunction) {
   const token = extractToken(req);
   if (token) {
-    const user = verifyUser(token);
-    if (user) {
-      req.user = user;
-      req.playerId = user.id;
-      req.playerName = user.username;
-      return next();
-    }
+    void verifyUser(token).then((user) => {
+      if (user) {
+        req.user = user;
+        req.playerId = user.id;
+        req.playerName = user.username;
+        return next();
+      }
+      continueAsGuest(req, res, next);
+    });
+    return;
   }
 
+  continueAsGuest(req, res, next);
+}
+
+function continueAsGuest(req: PlayerRequest, res: Response, next: NextFunction) {
   const guestId =
     (typeof req.headers["x-guest-id"] === "string" ? req.headers["x-guest-id"] : null) ??
     (typeof req.query.guest === "string" ? req.query.guest : null); // EventSource can't set headers

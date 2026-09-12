@@ -53,8 +53,8 @@ function adminAudit(
 // ---------------------------------------------------------------------------
 // GET /api/admin/stats
 // ---------------------------------------------------------------------------
-router.get("/stats", (_req: AuthRequest, res: Response) => {
-  const users = jsonUserStore.listAll();
+router.get("/stats", async (_req: AuthRequest, res: Response) => {
+  const users = await jsonUserStore.listAll();
   const botGames = botGameStore.listAll();
   const games1v1 = gameStore.listAll();
 
@@ -92,13 +92,13 @@ router.get("/stats", (_req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/admin/users?page=1&limit=20&search=username
 // ---------------------------------------------------------------------------
-router.get("/users", (req: AuthRequest, res: Response) => {
+router.get("/users", async (req: AuthRequest, res: Response) => {
   const page = Math.max(1, parseInt(String(req.query.page)) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit)) || 20));
   const search =
     typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
 
-  let users = jsonUserStore.listAll();
+  let users = await jsonUserStore.listAll();
   if (search) users = users.filter((u) => u.username.toLowerCase().includes(search));
 
   const total = users.length;
@@ -115,7 +115,7 @@ router.get("/users", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // PATCH /api/admin/users/:id — toggle isAdmin
 // ---------------------------------------------------------------------------
-router.patch("/users/:id", (req: AuthRequest, res: Response) => {
+router.patch("/users/:id", async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const isAdmin = (req.body as { isAdmin?: unknown })?.isAdmin;
   if (typeof isAdmin !== "boolean") {
@@ -124,7 +124,7 @@ router.patch("/users/:id", (req: AuthRequest, res: Response) => {
   if (id === req.user!.id && !isAdmin) {
     return res.status(400).json({ message: "You can't remove admin from yourself" });
   }
-  const updated = jsonUserStore.setAdmin(id, isAdmin);
+  const updated = await jsonUserStore.setAdmin(id, isAdmin);
   adminAudit(req, "admin.user.setAdmin", id, !!updated, { isAdmin });
   if (!updated) return res.status(404).json({ message: "User not found" });
   res.json({ user: toPublicUser(updated) });
@@ -133,12 +133,12 @@ router.patch("/users/:id", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // DELETE /api/admin/users/:id
 // ---------------------------------------------------------------------------
-router.delete("/users/:id", (req: AuthRequest, res: Response) => {
+router.delete("/users/:id", async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   if (id === req.user!.id) {
     return res.status(400).json({ message: "You can't delete yourself" });
   }
-  const ok = jsonUserStore.remove(id);
+  const ok = await jsonUserStore.remove(id);
   adminAudit(req, "admin.user.delete", id, ok);
   if (!ok) return res.status(404).json({ message: "User not found" });
   res.json({ ok: true });
