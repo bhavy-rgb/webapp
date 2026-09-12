@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -21,32 +21,11 @@ export default function App() {
         <ScrollToTop />
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/home"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/" element={<Home />} />
+          <Route path="/home" element={<Home />} />
           {/* Open to guests — login is not required to play */}
           <Route path="/lobby" element={<Lobby />} />
-          <Route
-            path="/training"
-            element={
-              <ProtectedRoute>
-                <Training />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/training" element={<Training />} />
           {/* Open to guests — login is not required to play */}
           <Route path="/bot" element={<Bot />} />
           {/* Playable without an account — invite links work for guests */}
@@ -64,7 +43,7 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/404" element={<NotFound />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
         </AuthProvider>
       </BrowserRouter>

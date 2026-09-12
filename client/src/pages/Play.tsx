@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { Check, Copy, Flag, Handshake, Hourglass } from "lucide-react";
+import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import { PlaySkeleton } from "@/components/Skeleton";
 import { ApiError, gamesApi, type GameState } from "@/api";
@@ -53,6 +54,7 @@ export default function Play() {
   const { user } = useAuth();
 
   const [game, setGame] = useState<GameState | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [spectating, setSpectating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -202,7 +204,7 @@ export default function Play() {
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [!!game, !!error]);
 
   const yourColor = game?.yourColor ?? null;
   const orientation = yourColor === "b" ? "black" : "white";
@@ -295,6 +297,7 @@ export default function Play() {
   };
 
   const doResign = async () => {
+    setActionError(null);
     if (!confirmResign) {
       setConfirmResign(true);
       setTimeout(() => setConfirmResign(false), 3000);
@@ -305,19 +308,20 @@ export default function Play() {
       await gamesApi.resign(code);
       const s = await gamesApi.state(code);
       applyState(s);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not complete the action. Please try again.");
     }
   };
 
   const doDraw = async (action: "offer" | "accept" | "decline") => {
+    setActionError(null);
     try {
       await gamesApi.draw(code, action);
       if (action === "offer") setDrawOffered(true);
       const s = await gamesApi.state(code);
       applyState(s);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not complete the action. Please try again.");
     }
   };
 
@@ -325,7 +329,7 @@ export default function Play() {
 
   if (error) {
     return (
-      <div className="grain min-h-screen bg-cream">
+      <div className="grain min-h-screen bg-cream play-workspace">
         <Navbar />
         <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-4 px-5 text-center">
           <p className="font-display text-3xl font-semibold text-ink">{error}</p>
@@ -342,7 +346,7 @@ export default function Play() {
 
   if (!game) {
     return (
-      <div className="grain min-h-screen bg-cream">
+      <div className="grain min-h-screen bg-cream play-workspace">
         <Navbar />
         <PlaySkeleton />
       </div>
@@ -364,10 +368,10 @@ export default function Play() {
   const timed = game.timeMinutes > 0;
 
   return (
-    <div className="grain min-h-screen bg-cream">
+    <div className="grain min-h-screen bg-cream play-workspace">
       <Navbar />
 
-      <section id="play-section" className="mx-auto max-w-6xl px-5 pb-16 pt-24">
+      <section id="main-content" className="mx-auto max-w-6xl px-5 pb-16 pt-24">
         <div className="mx-auto mb-6 max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-widest text-terracotta">
             Friend match · {code}
@@ -382,6 +386,8 @@ export default function Play() {
                   : "Opponent's move"}
           </h1>
         </div>
+
+        {actionError && <p role="alert" className="mx-auto mb-5 max-w-xl rounded-xl bg-capture/10 p-4 text-center text-sm text-capture">{actionError}</p>}
 
         {/* Spectator banner */}
         {spectating && !finished && (
@@ -407,6 +413,7 @@ export default function Play() {
             {/* Full URL — long-press to copy on mobile; doubles as the manual-copy
                 fallback when the Clipboard API is blocked (insecure contexts). */}
             <input
+              aria-label="Game invite link"
               ref={copyInputRef}
               readOnly
               value={inviteUrl}
@@ -466,7 +473,7 @@ export default function Play() {
 
         <div className="mx-auto grid max-w-4xl items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
           {/* Board column */}
-          <div className="rounded-3xl border border-parchment bg-white p-4 shadow-[0_20px_60px_-20px_rgba(38,35,30,0.2)]">
+          <div className="rounded-xl border border-parchment bg-white p-4 shadow-[0_20px_60px_-20px_rgba(38,35,30,0.2)]">
             {/* Opponent bar */}
             <div className="mb-3 flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -497,6 +504,7 @@ export default function Play() {
               <Chessboard
                 position={game.fen}
                 onPieceDrop={onPieceDrop}
+                onSquareClick={(square) => { if (isYourTurn) hints.onSquareClick(square, onPieceDrop); }}
                 onPieceDragBegin={hints.onPieceDragBegin}
                 onPieceDragEnd={hints.onPieceDragEnd}
                 customSquareStyles={hints.customSquareStyles}
@@ -505,9 +513,9 @@ export default function Play() {
                 areArrowsAllowed={false}
                 boardWidth={Math.min(boardWidth, 620)}
                 animationDuration={180}
-                customDarkSquareStyle={{ backgroundColor: "#b58863" }}
-                customLightSquareStyle={{ backgroundColor: "#f0e7d3" }}
-                customBoardStyle={{ borderRadius: "12px", overflow: "hidden" }}
+                customDarkSquareStyle={{ backgroundColor: "#8e9e7c" }}
+                customLightSquareStyle={{ backgroundColor: "#e9e8d5" }}
+                customBoardStyle={{ borderRadius: "0px", overflow: "hidden" }}
               />
             </div>
 
@@ -540,6 +548,7 @@ export default function Play() {
             {!finished && (
               <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-parchment px-1 pt-4">
                 <button
+                  disabled={!yourColor || waiting}
                   onClick={doResign}
                   className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all ${
                     confirmResign
@@ -551,7 +560,7 @@ export default function Play() {
                 </button>
                 <button
                   onClick={() => doDraw("offer")}
-                  disabled={drawOffered || waiting}
+                  disabled={drawOffered || waiting || !yourColor}
                   className="inline-flex items-center gap-1.5 rounded-full border border-parchment px-4 py-2 text-xs font-semibold text-ink-soft transition-all hover:border-forest/40 hover:text-forest disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Handshake size={14} /> {drawOffered ? "Draw offered…" : "Offer draw"}
@@ -568,7 +577,7 @@ export default function Play() {
 
           {/* Sidebar */}
           <div className="flex flex-col gap-5">
-            <div className="rounded-2xl border border-parchment bg-white p-5">
+            <div className="rounded-xl border border-parchment bg-white p-5">
               <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-ink-soft">
                 Move history
               </h2>
@@ -621,6 +630,7 @@ export default function Play() {
           </div>
         </div>
       </section>
+      <Footer />
     </div>
   );
 }

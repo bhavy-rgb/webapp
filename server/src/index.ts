@@ -1,6 +1,8 @@
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import dotenv from "dotenv";
+import "dotenv/config";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { installConsoleCapture } from "./consoleLogs.js";
 import { requireAdmin } from "./middleware/auth.js";
@@ -9,7 +11,6 @@ import authRouter from "./routes/auth.js";
 import botGamesRouter from "./routes/botGames.js";
 import gamesRouter from "./routes/games.js";
 
-dotenv.config();
 installConsoleCapture(); // ring-buffer console capture for the admin panel
 
 const app = express();
@@ -35,7 +36,7 @@ app.use((_req, res, next) => {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self'",
+      "script-src 'self' 'wasm-unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob:",
@@ -64,6 +65,17 @@ app.use("/api/admin", requireAdmin, adminRouter);
 app.use("/api", (_req, res) => {
   res.status(404).json({ message: "Not found" });
 });
+
+// Serve the application and API from one origin in production. History fallback
+// keeps shared invite links and page refreshes working without a separate host.
+const clientDist = fileURLToPath(new URL("../../client/dist/", import.meta.url));
+if (existsSync(`${clientDist}/index.html`)) {
+  app.use(express.static(clientDist));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/assets/") || !req.accepts("html")) return next();
+    res.sendFile(`${clientDist}/index.html`);
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`Chessify server running on http://localhost:${PORT}`);
