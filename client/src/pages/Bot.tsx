@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Chess } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import { RotateCcw, Cpu, Flag } from "lucide-react";
+import { Link } from "react-router-dom";
+import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { botGamesApi, getGuestId } from "@/api";
@@ -19,7 +21,7 @@ const statusLabels: Record<Status, { text: string; className: string }> = {
   resigned: { text: "You resigned", className: "bg-parchment text-ink-soft" },
 };
 
-export default function Bot() {
+export default function Bot({ embedded = false }: { embedded?: boolean }) {
   const gameRef = useRef(new Chess());
   const [fen, setFen] = useState(gameRef.current.fen());
   const [history, setHistory] = useState<string[]>([]);
@@ -140,6 +142,7 @@ export default function Bot() {
         updateEval(g.fen(), g.turn() as PlayerColor);
       }
     } catch {
+      if (seq !== requestSeq.current) return;
       // Engine failed (no WASM support?) — random fallback keeps game playable.
       const moves = g.moves({ verbose: true });
       if (moves.length > 0) {
@@ -251,27 +254,28 @@ export default function Bot() {
       : `${evalCp >= 0 ? "+" : ""}${(evalCp / 100).toFixed(1)}`;
 
   return (
-    <div className="grain min-h-screen bg-cream">
-      <Navbar />
+    <div className={embedded ? "bot-embedded play-workspace" : "grain min-h-screen bg-cream play-workspace"}>
+      {!embedded && <Navbar />}
 
-      <section className="mx-auto max-w-6xl px-5 pt-28">
-        <ScrollReveal className="mx-auto mb-10 max-w-2xl text-center">
+      <section className={embedded ? "embedded-section" : "mx-auto max-w-6xl px-5 pb-16 pt-28"} id={embedded ? undefined : "main-content"}>
+        {!embedded && <ScrollReveal className="page-heading mx-auto mb-10 max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-widest text-terracotta">
             Bot match
           </span>
           <h1 className="mt-3 font-display text-5xl font-semibold tracking-tight text-ink sm:text-6xl">
-            You vs. the machine
+            A worthy opponent. Your own pace.
           </h1>
           <p className="mt-4 text-ink-soft">
-            A real chess engine — alpha-beta search with a transposition table,
-            written in Rust and compiled to WebAssembly. Pick a difficulty and play.
+            Five levels. No pressure. Pick your side and make your first move.
+            Our Rust-powered chess engine will take it from there.
           </p>
-        </ScrollReveal>
+        </ScrollReveal>}
 
-        <div className="mx-auto grid max-w-4xl items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="bot-layout">
           {/* Board */}
           <ScrollReveal>
-            <div className="rounded-3xl border border-parchment bg-white p-4 shadow-[0_20px_60px_-20px_rgba(38,35,30,0.2)]">
+            <div className="bot-board-panel">
+              <div className="board-player"><span className="player-mark"><Cpu size={18}/></span><div><strong>Chessify engine <small>BOT</small></strong><p>Your thoughtful sparring partner</p></div><span className="player-level">{LEVELS[level].name}</span></div>
               {/* Eval bar */}
               <div className="mb-3 flex items-center gap-2 px-1">
                 <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-ink/80">
@@ -285,10 +289,12 @@ export default function Bot() {
                 </span>
               </div>
 
-              <div className="w-full" ref={boardWrapRef}>
+              <div className="w-full board-border" ref={boardWrapRef}>
                 <Chessboard
                   position={fen}
                   onPieceDrop={onPieceDrop}
+                  onSquareClick={(square) => hints.onSquareClick(square, onPieceDrop)}
+                  arePiecesDraggable={!thinking && (status === "playing" || status === "check") && gameRef.current.turn() === playerColor}
                   onPieceDragBegin={hints.onPieceDragBegin}
                   onPieceDragEnd={hints.onPieceDragEnd}
                   customSquareStyles={hints.customSquareStyles}
@@ -296,12 +302,13 @@ export default function Bot() {
                   areArrowsAllowed={false}
                   boardWidth={Math.min(boardWidth, 620)}
                   animationDuration={180}
-                  customDarkSquareStyle={{ backgroundColor: "#b58863" }}
-                  customLightSquareStyle={{ backgroundColor: "#f0e7d3" }}
-                  customBoardStyle={{ borderRadius: "12px", overflow: "hidden" }}
+                  customDarkSquareStyle={{ backgroundColor: "#8e9e7c" }}
+                  customLightSquareStyle={{ backgroundColor: "#e9e8d5" }}
+                  customBoardStyle={{ borderRadius: "0px", overflow: "hidden" }}
                 />
               </div>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1">
+              <div className="board-player your-player"><span className="player-mark ivory">{playerColor === "w" ? "♔" : "♚"}</span><div><strong>You</strong><p>A fresh perspective</p></div><span className="player-level">{playerColor === "w" ? "White" : "Black"}</span></div>
+              <div className="board-controls mt-4 flex flex-wrap items-center justify-between gap-2 px-1">
                 <span
                   className={`rounded-full px-4 py-2 text-sm font-semibold ${statusLabels[status].className}`}
                 >
@@ -331,7 +338,8 @@ export default function Bot() {
 
           {/* Sidebar */}
           <ScrollReveal delay={0.15} direction="right">
-            <div className="flex flex-col gap-5">
+            <div className="bot-settings flex flex-col gap-5">
+              <div className="settings-heading"><span className="eyebrow">A LITTLE FRIENDLY COMPETITION</span><h3>Meet your next opponent.</h3><p>Room to experiment, space to improve. Choose a level and move a piece to begin.</p></div>
               {/* Difficulty */}
               <div className="rounded-2xl border border-parchment bg-white p-5">
                 <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ink-soft">
@@ -342,6 +350,7 @@ export default function Bot() {
                     <button
                       key={l.id}
                       onClick={() => setLevel(l.id)}
+                      aria-pressed={level === l.id}
                       className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                         level === l.id
                           ? "bg-forest text-cream"
@@ -359,6 +368,7 @@ export default function Bot() {
                 </h2>
                 <div className="flex gap-1.5">
                   <button
+                    aria-pressed={playerColor === "w"}
                     onClick={() => startNewGame("w")}
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                       playerColor === "w"
@@ -369,6 +379,7 @@ export default function Bot() {
                     ♔ White
                   </button>
                   <button
+                    aria-pressed={playerColor === "b"}
                     onClick={() => startNewGame("b")}
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                       playerColor === "b"
@@ -423,12 +434,13 @@ export default function Bot() {
               </div>
 
               <div className="rounded-2xl border border-forest/15 bg-forest/5 p-5 text-sm leading-relaxed text-ink-soft">
-                <p className="mb-2 font-semibold text-forest">Under the hood</p>
+                <p className="mb-2 font-semibold text-forest">A little board wisdom</p>
                 <ul className="list-inside list-disc space-y-1.5 text-[13px]">
-                  <li>Rust engine compiled to WebAssembly, running in a Web Worker.</li>
-                  <li>Negamax + alpha-beta, transposition table, quiescence search.</li>
-                  <li>Lower levels mix in casual moves so games stay winnable.</li>
+                  <li>Tap a piece, then a destination — or drag to move.</li>
+                  <li>Look for the dots: they show your legal moves.</li>
+                  <li>Five levels powered by our Rust / WebAssembly engine.</li>
                 </ul>
+                <Link to="/training" className="editorial-text-link mt-4">Explore the piece library</Link>
               </div>
 
               {lastMove && (
@@ -440,6 +452,7 @@ export default function Bot() {
           </ScrollReveal>
         </div>
       </section>
+      {!embedded && <Footer />}
     </div>
   );
 }

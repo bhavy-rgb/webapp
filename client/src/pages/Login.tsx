@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { KeyRound, LogIn, Sparkles, UserPlus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -76,7 +76,8 @@ export default function Login() {
   }
 
   return (
-    <div className="grain relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-16">
+    <div className="auth-page grain relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-16">
+      <Link to="/home" className="auth-home-link">← Back to Chessify</Link>
       {/* Ambient blobs */}
       <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-forest/15 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-80 w-80 rounded-full bg-terracotta/15 blur-3xl" />
@@ -96,7 +97,7 @@ export default function Login() {
             </span>
             <h1 className="font-display text-4xl font-semibold text-ink">Chessify</h1>
             <p className="mt-1.5 text-sm text-ink-soft">
-              Learn how every piece moves — then prove it against the bot.
+              Your own little corner of the chessboard.
             </p>
           </div>
 
@@ -132,10 +133,12 @@ export default function Login() {
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {mode === "signup" && (
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                <label htmlFor="username" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
                   Username
                 </label>
                 <input
+                  id="username"
+                  aria-invalid={!!fieldErrors.username}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="grandmaster99"
@@ -154,11 +157,13 @@ export default function Login() {
 
             {mode === "signup" ? (
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                <label htmlFor="email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
                   Email
                 </label>
                 <input
                   type="email"
+                  id="email"
+                  aria-invalid={!!fieldErrors.email}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
@@ -173,10 +178,12 @@ export default function Login() {
               </div>
             ) : (
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                <label htmlFor="username" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
                   Username or email
                 </label>
                 <input
+                  id="identifier"
+                  aria-invalid={!!fieldErrors.identifier}
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="grandmaster99"
@@ -195,7 +202,7 @@ export default function Login() {
 
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wide text-ink-soft">
                   Password
                 </label>
                 {mode === "login" && (
@@ -206,7 +213,9 @@ export default function Login() {
               </div>
               <input
                 type="password"
-                value={password}
+                id="password"
+                  aria-invalid={!!fieldErrors.password}
+                  value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
@@ -259,7 +268,7 @@ export default function Login() {
         </div>
 
         <p className="mt-6 text-center text-xs text-ink-soft/70">
-          Knight, bishop, rook, queen — master them all on Chessify.
+          <Link to="/lobby" className="editorial-text-link">Just looking? Play as a guest →</Link>
         </p>
       </motion.div>
     </div>
