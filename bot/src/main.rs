@@ -11,7 +11,8 @@
 use chessify_bot::board::{self, Board, Move, START_FEN};
 use chessify_bot::eval;
 use chessify_bot::movegen::{in_check, legal_moves, make_move, perft};
-use chessify_bot::search::search;
+use chessify_bot::search::{search, search_with_profile};
+use chessify_bot::techniques::Profile;
 use std::io::{self, BufRead, Write};
 
 const DEFAULT_DEPTH: u32 = 5;
@@ -25,7 +26,7 @@ fn parse_flag<T: std::str::FromStr>(args: &[String], flag: &str, default: T) -> 
         .unwrap_or(default)
 }
 
-fn cmd_bestmove(fen: &str, depth: u32, ms: u128) {
+fn cmd_bestmove(fen: &str, depth: u32, ms: u128, profile: Profile) {
     let b = match Board::from_fen(fen) {
         Ok(b) => b,
         Err(e) => {
@@ -33,7 +34,7 @@ fn cmd_bestmove(fen: &str, depth: u32, ms: u128) {
             std::process::exit(1);
         }
     };
-    let r = search(&b, depth, ms);
+    let r = search_with_profile(&b, depth, ms, &[], profile);
     match r.best {
         Some(m) => println!(
             "{{\"bestmove\":\"{}\",\"score\":{},\"depth\":{},\"nodes\":{}}}",
@@ -138,12 +139,14 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("help");
 
+    let profile = if args.iter().any(|a| a == "--books") { Profile::Books } else { Profile::Legacy };
+
     match cmd {
         "bestmove" => {
             let fen = args.get(1).map(String::as_str).unwrap_or(START_FEN);
             let depth = parse_flag(&args, "--depth", DEFAULT_DEPTH);
             let ms = parse_flag(&args, "--ms", DEFAULT_MS);
-            cmd_bestmove(fen, depth, ms);
+            cmd_bestmove(fen, depth, ms, profile);
         }
         "play" => {
             let depth = parse_flag(&args, "--depth", DEFAULT_DEPTH);
@@ -161,10 +164,11 @@ fn main() {
         "eval" => {
             let fen = args.get(1).map(String::as_str).unwrap_or(START_FEN);
             let b = Board::from_fen(fen).expect("bad FEN");
-            println!("{}", eval::evaluate(&b));
+            println!("{}", profile.evaluate(&b));
         }
         _ => {
             println!("chessify-bot — minimax (alpha-beta) chess engine\n");
+            println!("  Add --books to bestmove or eval for opt-in book-inspired heuristics.");
             println!("  chessify-bot bestmove \"<FEN>\" [--depth N] [--ms T]");
             println!("  chessify-bot play [--depth N] [--ms T]");
             println!("  chessify-bot perft \"<FEN>\" <depth>");

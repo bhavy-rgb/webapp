@@ -9,11 +9,13 @@ pub mod eval;
 pub mod movegen;
 pub mod search;
 pub mod timer;
+pub mod techniques;
 pub mod zobrist;
 
 use board::Board;
 use movegen::{in_check, legal_moves, make_move};
-use search::search_with_history;
+use search::search_with_profile;
+use techniques::Profile;
 
 /// Difficulty presets: (max depth, time budget ms, random-blunder %).
 fn level_params(level: u32) -> (u32, u128, u32) {
@@ -41,6 +43,10 @@ fn roll(seed: u64, modulo: u32) -> u32 {
 ///   {"bestmove":null,"terminal":"checkmate"|"stalemate"}
 ///   {"error":"..."}
 pub fn best_move_json(fen: &str, level: u32, history_hashes: &[u64]) -> String {
+    best_move_with_profile_json(fen, level, history_hashes, Profile::Legacy)
+}
+
+pub fn best_move_with_profile_json(fen: &str, level: u32, history_hashes: &[u64], profile: Profile) -> String {
     let b = match Board::from_fen(fen) {
         Ok(b) => b,
         Err(e) => return format!("{{\"error\":\"bad FEN: {}\"}}", e.replace('"', "'")),
@@ -67,7 +73,7 @@ pub fn best_move_json(fen: &str, level: u32, history_hashes: &[u64]) -> String {
         }
     }
 
-    let r = search_with_history(&b, depth, ms, history_hashes);
+    let r = search_with_profile(&b, depth, ms, history_hashes, profile);
     match r.best {
         Some(m) => format!(
             "{{\"bestmove\":\"{}\",\"score\":{},\"depth\":{},\"nodes\":{}}}",
@@ -113,6 +119,18 @@ mod wasm {
     pub fn engine_best_move(fen: &str, level: u32, uci_history: &str) -> String {
         let hashes = hashes_for_moves(uci_history).unwrap_or_default();
         best_move_json(fen, level, &hashes)
+    }
+
+    /// Opt-in profile. Original exports keep their original behavior.
+    #[wasm_bindgen]
+    pub fn engine_best_move_books(fen: &str, level: u32, uci_history: &str) -> String {
+        let hashes = hashes_for_moves(uci_history).unwrap_or_default();
+        best_move_with_profile_json(fen, level, &hashes, Profile::Books)
+    }
+
+    #[wasm_bindgen]
+    pub fn engine_eval_books(fen: &str) -> i32 {
+        Board::from_fen(fen).map(|b| Profile::Books.evaluate(&b)).unwrap_or(0)
     }
 
     /// All legal moves for a FEN as a JSON array of UCI strings.
