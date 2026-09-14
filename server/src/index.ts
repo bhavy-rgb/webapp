@@ -1,6 +1,7 @@
+import "./config.js";
+import { provisionAdmin } from "./adminBootstrap.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import "dotenv/config";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -11,6 +12,7 @@ import authRouter from "./routes/auth.js";
 import botGamesRouter from "./routes/botGames.js";
 import gamesRouter from "./routes/games.js";
 
+provisionAdmin();
 installConsoleCapture(); // ring-buffer console capture for the admin panel
 
 const app = express();
