@@ -10,9 +10,8 @@ module.exports = {
       args: "tsx src/index.ts",
       env: {
         CHESSIFY_PORT: 3001,
-        JWT_SECRET: "sandbox-dev-secret",
-        // Bootstrap admin: the FIRST signup with this username gets isAdmin=true.
-        ADMIN_USERNAME: "admin",
+        // JWT_SECRET and ADMIN_PASSWORD_HASH come from private .env or the host.
+        // The administrator username is fixed server-side to ARISE.
       },
       watch: false,
       instances: 1,

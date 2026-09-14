@@ -1,3 +1,4 @@
+import "../config.js";
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { jsonUserStore, type User } from "../db.js";
@@ -12,7 +13,7 @@ export interface AuthRequest extends Request {
 
 export function signToken(user: User): string {
   return jwt.sign(
-    { sub: user.id, username: user.username, isAdmin: user.isAdmin === true },
+    { sub: user.id, username: user.username, isAdmin: user.isAdmin === true, sv: user.sessionVersion ?? 0 },
     JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -46,8 +47,9 @@ function extractToken(req: Request): string | null {
 
 function verifyUser(token: string): User | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { sub: string };
-    return jsonUserStore.findById(payload.sub) ?? null;
+    const payload = jwt.verify(token, JWT_SECRET) as { sub: string; sv?: number };
+    const user = jsonUserStore.findById(payload.sub);
+    return user && (payload.sv ?? 0) === (user.sessionVersion ?? 0) ? user : null;
   } catch {
     return null;
   }

@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, BookOpen, Swords, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowRight, BookOpen, Swords, Users, X } from "lucide-react";
+import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { ApiError, gamesApi } from "@/api";
@@ -14,9 +15,11 @@ const TIME_CONTROLS = [
   { label: "∞", min: 0, inc: 0 },
 ];
 
-export default function Lobby() {
+export default function Lobby({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate();
-  const [friendOpen, setFriendOpen] = useState(false);
+  const [params] = useSearchParams();
+  const [friendOpen, setFriendOpen] = useState(params.get("mode") === "friend");
+  const modalRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<"create" | "join">("create");
   const [color, setColor] = useState<"w" | "b" | "random">("random");
   const [tc, setTc] = useState(4); // index into TIME_CONTROLS, default unlimited
@@ -24,7 +27,39 @@ export default function Lobby() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (params.get("mode") === "friend") setFriendOpen(true);
+  }, [params]);
+
+  useEffect(() => {
+    if (!friendOpen || embedded) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const dialog = modalRef.current;
+    dialog?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) setFriendOpen(false);
+      if (event.key !== "Tab" || !dialog) return;
+      const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href]'));
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+      previous?.focus();
+    };
+  }, [friendOpen, busy, embedded]);
+
   const createGame = async () => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -38,8 +73,9 @@ export default function Lobby() {
   };
 
   const joinGame = async () => {
+    if (busy) return;
     const code = joinCode.trim().toUpperCase();
-    if (code.length < 4) {
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
       setError("Enter the 6-character game code");
       return;
     }
@@ -54,24 +90,165 @@ export default function Lobby() {
     }
   };
 
+  const friendForm = (
+          <div ref={embedded ? undefined : modalRef} role={embedded ? undefined : "dialog"} aria-modal={embedded ? undefined : true} aria-labelledby="friend-title" tabIndex={embedded ? undefined : -1} className="w-full max-w-md rounded-3xl border border-parchment bg-cream p-7 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h3 id="friend-title" className="font-display text-2xl font-semibold text-ink">Play a friend</h3>
+                <p className="mt-1 text-sm text-ink-soft">
+                  Create a game and share the link, or join with a code.
+                </p>
+              </div>
+              {!embedded && <button
+                disabled={busy}
+                onClick={() => setFriendOpen(false)}
+                className="rounded-full p-2 text-ink-soft hover:bg-parchment"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>}
+            </div>
+
+            {/* Tabs */}
+            <div className="mb-5 grid grid-cols-2 gap-1 rounded-full bg-parchment p-1">
+              {(["create", "join"] as const).map((t) => (
+                <button
+                  key={t}
+                  disabled={busy}
+                  aria-pressed={tab === t}
+                  onClick={() => {
+                    setTab(t);
+                    setError(null);
+                  }}
+                  className={`rounded-full py-2 text-sm font-semibold capitalize transition-all ${
+                    tab === t ? "bg-forest text-cream shadow-sm" : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  {t === "create" ? "Create game" : "Join with code"}
+                </button>
+              ))}
+            </div>
+
+            {tab === "create" ? (
+              <div className="space-y-5">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-soft">
+                    Time control
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {TIME_CONTROLS.map((t, i) => (
+                      <button
+                        key={t.label}
+                        disabled={busy}
+                        aria-pressed={tc === i}
+                        onClick={() => setTc(i)}
+                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                          tc === i
+                            ? "bg-forest text-cream"
+                            : "border border-parchment bg-white text-ink-soft hover:text-ink"
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-soft">
+                    Your color
+                  </p>
+                  <div className="flex gap-2">
+                    {(
+                      [
+                        { v: "w", label: "♔ White" },
+                        { v: "random", label: "Random" },
+                        { v: "b", label: "♚ Black" },
+                      ] as const
+                    ).map((c) => (
+                      <button
+                        key={c.v}
+                        disabled={busy}
+                        aria-pressed={color === c.v}
+                        onClick={() => setColor(c.v)}
+                        className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
+                          color === c.v
+                            ? "bg-forest text-cream"
+                            : "border border-parchment bg-white text-ink-soft hover:text-ink"
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={createGame}
+                  disabled={busy}
+                  className="w-full rounded-full bg-terracotta py-3 text-sm font-semibold text-cream shadow-sm transition-all hover:bg-terracotta/90 active:scale-[0.99] disabled:opacity-60"
+                >
+                  {busy ? "Creating…" : "Create game & get invite link"}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <input
+                  aria-label="Game code"
+                  disabled={busy}
+                  autoComplete="off"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                  onKeyDown={(e) => e.key === "Enter" && joinGame()}
+                  maxLength={6}
+                  placeholder="e.g. AB3XY9"
+                  className="w-full rounded-xl border border-parchment bg-white px-4 py-3 text-center font-display text-2xl font-semibold tracking-[0.3em] text-ink outline-none transition-all placeholder:tracking-normal placeholder:text-ink-soft/40 focus:border-forest"
+                />
+                <button
+                  onClick={joinGame}
+                  disabled={busy}
+                  className="w-full rounded-full bg-terracotta py-3 text-sm font-semibold text-cream shadow-sm transition-all hover:bg-terracotta/90 active:scale-[0.99] disabled:opacity-60"
+                >
+                  {busy ? "Joining…" : "Join game"}
+                </button>
+              </div>
+            )}
+
+            {busy && (
+              <div className="mt-4 space-y-2" aria-hidden>
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            )}
+
+            {error && (
+              <p role="alert" className="mt-4 rounded-xl bg-capture/10 px-4 py-2.5 text-center text-sm font-medium text-capture">
+                {error}
+              </p>
+            )}
+          </div>
+  );
+
+  if (embedded) return <div className="friend-setup">{friendForm}</div>;
+
   return (
-    <div className="grain min-h-screen bg-cream">
+    <div className="grain min-h-screen bg-cream lobby-page">
       <Navbar />
 
-      <section className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-5 pb-16 pt-28">
+      <section id="main-content" className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-5 pb-16 pt-28">
         <ScrollReveal className="mb-14 text-center">
           <span className="text-xs font-semibold uppercase tracking-widest text-terracotta">
             The lobby
           </span>
           <h1 className="mt-3 font-display text-5xl font-semibold tracking-tight text-ink sm:text-6xl">
-            Where do you want to start?
+            There’s a game for every mood.
           </h1>
           <p className="mx-auto mt-4 max-w-md text-ink-soft">
-            Three modes. One goal: making every piece feel second nature.
+            A little practice, a familiar opponent, or something new. Take your seat.
           </p>
         </ScrollReveal>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="lobby-modes grid gap-6 md:grid-cols-3">
           <ScrollReveal direction="left">
             <Link
               to="/training"
@@ -144,6 +321,7 @@ export default function Lobby() {
         </div>
       </section>
 
+      <Footer />
       {/* -------- Play-a-friend modal -------- */}
       {friendOpen && (
         <div
@@ -153,132 +331,7 @@ export default function Lobby() {
             if (e.target === e.currentTarget && !busy) setFriendOpen(false);
           }}
         >
-          <div className="w-full max-w-md rounded-3xl border border-parchment bg-cream p-7 shadow-2xl">
-            <div className="mb-5 flex items-start justify-between">
-              <div>
-                <h3 className="font-display text-2xl font-semibold text-ink">Play a friend</h3>
-                <p className="mt-1 text-sm text-ink-soft">
-                  Create a game and share the link, or join with a code.
-                </p>
-              </div>
-              <button
-                onClick={() => setFriendOpen(false)}
-                className="rounded-full p-2 text-ink-soft hover:bg-parchment"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Tabs */}
-            <div className="mb-5 grid grid-cols-2 gap-1 rounded-full bg-parchment p-1">
-              {(["create", "join"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => {
-                    setTab(t);
-                    setError(null);
-                  }}
-                  className={`rounded-full py-2 text-sm font-semibold capitalize transition-all ${
-                    tab === t ? "bg-forest text-cream shadow-sm" : "text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  {t === "create" ? "Create game" : "Join with code"}
-                </button>
-              ))}
-            </div>
-
-            {tab === "create" ? (
-              <div className="space-y-5">
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-soft">
-                    Time control
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {TIME_CONTROLS.map((t, i) => (
-                      <button
-                        key={t.label}
-                        onClick={() => setTc(i)}
-                        className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                          tc === i
-                            ? "bg-forest text-cream"
-                            : "border border-parchment bg-white text-ink-soft hover:text-ink"
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-soft">
-                    Your color
-                  </p>
-                  <div className="flex gap-2">
-                    {(
-                      [
-                        { v: "w", label: "♔ White" },
-                        { v: "random", label: "🎲 Random" },
-                        { v: "b", label: "♚ Black" },
-                      ] as const
-                    ).map((c) => (
-                      <button
-                        key={c.v}
-                        onClick={() => setColor(c.v)}
-                        className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
-                          color === c.v
-                            ? "bg-forest text-cream"
-                            : "border border-parchment bg-white text-ink-soft hover:text-ink"
-                        }`}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  onClick={createGame}
-                  disabled={busy}
-                  className="w-full rounded-full bg-terracotta py-3 text-sm font-semibold text-cream shadow-sm transition-all hover:bg-terracotta/90 active:scale-[0.99] disabled:opacity-60"
-                >
-                  {busy ? "Creating…" : "Create game & get invite link"}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <input
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === "Enter" && joinGame()}
-                  maxLength={6}
-                  placeholder="e.g. AB3XY9"
-                  className="w-full rounded-xl border border-parchment bg-white px-4 py-3 text-center font-display text-2xl font-semibold tracking-[0.3em] text-ink outline-none transition-all placeholder:tracking-normal placeholder:text-ink-soft/40 focus:border-forest"
-                />
-                <button
-                  onClick={joinGame}
-                  disabled={busy}
-                  className="w-full rounded-full bg-terracotta py-3 text-sm font-semibold text-cream shadow-sm transition-all hover:bg-terracotta/90 active:scale-[0.99] disabled:opacity-60"
-                >
-                  {busy ? "Joining…" : "Join game"}
-                </button>
-              </div>
-            )}
-
-            {busy && (
-              <div className="mt-4 space-y-2" aria-hidden>
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-2/3" />
-              </div>
-            )}
-
-            {error && (
-              <p className="mt-4 rounded-xl bg-capture/10 px-4 py-2.5 text-center text-sm font-medium text-capture">
-                {error}
-              </p>
-            )}
-          </div>
+          {friendForm}
         </div>
       )}
     </div>

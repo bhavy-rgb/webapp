@@ -1,232 +1,102 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowRight, ChevronDown, GraduationCap, Puzzle, Swords } from "lucide-react";
+import { ArrowDown, ArrowRight, BookOpen, Cpu, Users } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import HeroVideo from "@/components/HeroVideo";
-import { ScrollReveal } from "@/components/ScrollReveal";
-import { PIECES } from "@/lib/pieces";
+import Bot from "@/pages/Bot";
+import Lobby from "@/pages/Lobby";
 import { BoardDiagram } from "@/components/BoardDiagram";
+import { PIECES } from "@/lib/pieces";
+
+const modes = [
+  { id: "bot", icon: Cpu, title: "Play the bot", note: "A little practice. A worthy opponent." },
+  { id: "friend", icon: Users, title: "Play a friend", note: "Good company. A great game." },
+  { id: "learn", icon: BookOpen, title: "Learn the game", note: "Small lessons. Lasting confidence." },
+] as const;
+type Mode = typeof modes[number]["id"];
+
+// Original vector artwork: no external image or heavy 3D runtime required.
+function RookArtwork() {
+  return (
+    <div className="rook-art">
+      <div className="art-label"><span>THE GAME, IN A NEW LIGHT</span><span>NO. 001</span></div>
+      <div className="art-orbit" />
+      <svg className="rook-sculpture" viewBox="0 0 500 440" role="img" aria-label="Sculptural forest-green rook on a sage chessboard">
+        <defs>
+          <linearGradient id="rook-body" x1="0" x2="1"><stop stopColor="#142e25"/><stop offset=".38" stopColor="#45634c"/><stop offset=".66" stopColor="#3b5743"/><stop offset="1" stopColor="#162e25"/></linearGradient>
+          <linearGradient id="rook-top" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#829375"/><stop offset="1" stopColor="#304d3a"/></linearGradient>
+          <radialGradient id="rook-shadow"><stop stopColor="#233b2a" stopOpacity=".35"/><stop offset="1" stopColor="#233b2a" stopOpacity="0"/></radialGradient>
+          <pattern id="art-board" width="100" height="100" patternUnits="userSpaceOnUse"><rect width="100" height="100" fill="#d8decd"/><path d="M0 0h50v50H0zM50 50h50v50H50z" fill="#b6c2a7"/></pattern>
+        </defs>
+        <path d="M45 350 270 256 477 339 253 432Z" fill="url(#art-board)" opacity=".72"/>
+        <ellipse cx="270" cy="349" rx="132" ry="37" fill="url(#rook-shadow)"/>
+        <g transform="translate(5,-8)">
+          <path d="M171 323q79-33 158 0v22q-79 36-158 0Z" fill="url(#rook-body)"/>
+          <ellipse cx="250" cy="323" rx="79" ry="25" fill="url(#rook-top)"/>
+          <path d="M183 305q67-24 134 0v20q-67 29-134 0Z" fill="url(#rook-body)"/>
+          <ellipse cx="250" cy="305" rx="67" ry="22" fill="url(#rook-top)"/>
+          <path d="M213 189q7 62-17 107 54 29 108 0-24-45-17-107Z" fill="url(#rook-body)"/>
+          <path d="M200 175q50-19 100 0v23q-50 22-100 0Z" fill="url(#rook-body)"/>
+          <ellipse cx="250" cy="175" rx="50" ry="17" fill="url(#rook-top)"/>
+          <path d="M190 114v57q60 35 120 0v-57l-25 8v22l-23 5v-26l-25 1v25l-23-6v-23Z" fill="url(#rook-body)"/>
+          <path d="m190 114 18-12 24 9-18 9Zm47 10 19-13 25-1-19 13Zm48-2 17-12 25-8-17 12Z" fill="#829375"/>
+          <path d="m310 114 17-12v56l-17 13Z" fill="#1b3429"/>
+          <path d="M220 210q4 46-8 71" fill="none" stroke="#7a8d6d" strokeOpacity=".3" strokeWidth="3"/>
+        </g>
+      </svg>
+      <div className="art-number">64<span>SQUARES.<br/>ENDLESS STORIES.</span></div>
+      <div className="art-caption"><span>THE ROOK</span><small>Strong. Steady. Full of possibility.</small></div>
+      <div className="art-baseline"><span><i/> YOUR MOVE, ALWAYS.</span><span>a1 — h8</span></div>
+    </div>
+  );
+}
 
 export default function Home() {
+  const [mode, setMode] = useState<Mode>("bot");
+  const selectMode = (next: Mode) => {
+    setMode(next);
+  };
   return (
-    <div className="grain min-h-screen bg-cream">
+    <div className="editorial-home grain min-h-screen bg-cream">
       <Navbar />
-
-      {/* ===== HERO ===== */}
-      <section className="relative flex min-h-screen flex-col justify-center overflow-hidden pt-24">
-        <div className="pointer-events-none absolute -right-40 top-10 h-[28rem] w-[28rem] rounded-full bg-forest/10 blur-3xl" />
-        <div className="pointer-events-none absolute -left-40 bottom-10 h-[24rem] w-[24rem] rounded-full bg-terracotta/10 blur-3xl" />
-
-        <div className="relative mx-auto w-full max-w-6xl px-5">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
-            <div>
-              <motion.span
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1, duration: 0.5 }}
-                className="inline-flex items-center gap-2 rounded-full border border-forest/20 bg-forest/5 px-4 py-1.5 text-xs font-semibold text-forest"
-              >
-                <GraduationCap size={14} /> Learn chess, piece by piece
-              </motion.span>
-
-              <motion.h1
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-                className="mt-6 font-display text-6xl font-semibold leading-[0.95] tracking-tight text-ink sm:text-7xl"
-              >
-                Every piece,
-                <br />
-                <span className="italic text-forest">one clear move.</span>
-              </motion.h1>
-
-              <motion.p
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35, duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-                className="mt-6 max-w-md text-lg leading-relaxed text-ink-soft"
-              >
-                Stop guessing how the knight moves. Chessify shows you every legal
-                move of every piece on a real board — then lets you practice
-                against a bot.
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-                className="mt-9 flex flex-wrap gap-3"
-              >
-                <Link
-                  to="/training"
-                  className="inline-flex items-center gap-2 rounded-full bg-forest px-7 py-3.5 text-sm font-semibold text-cream shadow-md transition-all hover:bg-forest-deep hover:shadow-lg active:scale-[0.98]"
-                >
-                  Start training <ArrowRight size={16} />
-                </Link>
-                <Link
-                  to="/lobby"
-                  className="inline-flex items-center gap-2 rounded-full border border-forest/25 px-7 py-3.5 text-sm font-semibold text-forest transition-all hover:border-forest hover:bg-forest/5"
-                >
-                  Enter the lobby
-                </Link>
-              </motion.div>
+      <main id="main-content" className="home-main">
+        <section className="home-hero">
+          <div className="hero-copy">
+            <span className="eyebrow"><span className="tiny-checker"/> A LITTLE PLAY. A SHARPER MIND.</span>
+            <h1>Your next move.<br/><em>Your own pace.</em></h1>
+            <p>A quiet corner of the internet for a beautiful game.<br className="desktop-break"/> Play a bot, challenge a friend, or simply get better.</p>
+            <div className="hero-actions">
+              <a href="#take-your-seat" className="editorial-button" onClick={() => selectMode("bot")}>Let’s play <ArrowRight size={16}/></a>
+              <Link to="/training" className="editorial-text-link">New to chess? Start here <ArrowRight size={14}/></Link>
             </div>
-
-            {/* 3D hero video (lazy-loaded, subtle scroll parallax) */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.45, duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
-              className="mx-auto w-full max-w-xl"
-            >
-              <HeroVideo />
-            </motion.div>
+            <div className="hero-footnote"><span aria-hidden="true">♟♞♜</span>Every grandmaster started with a first move.</div>
           </div>
-        </div>
-
-        {/* Scroll cue */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.1, duration: 0.6 }}
-          className="absolute bottom-7 left-1/2 -translate-x-1/2"
-        >
-          <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-            className="flex flex-col items-center gap-1 text-ink-soft/70"
-          >
-            <span className="text-[10px] font-semibold uppercase tracking-widest">Scroll</span>
-            <ChevronDown size={18} />
-          </motion.div>
-        </motion.div>
-      </section>
-
-      {/* ===== FEATURES ===== */}
-      <section className="mx-auto max-w-6xl px-5 py-24">
-        <ScrollReveal className="mx-auto mb-14 grid max-w-xl place-items-center gap-8 text-center">
-          <div className="w-full max-w-[280px] rounded-3xl border border-parchment bg-white p-5 shadow-[0_20px_60px_-20px_rgba(38,35,30,0.2)]">
-            <BoardDiagram piece={PIECES[1]} />
-            <p className="mt-3 text-center text-sm font-medium text-ink-soft">
-              The knight — <span className="text-ink">an L-shape, every time.</span>
-            </p>
+          <RookArtwork />
+        </section>
+        <div className="club-strip"><span className="eyebrow">NO PRESSURE. JUST PLAY.</span><p>For the first-timers. The overthinkers. The <em>“one more game”</em> people.</p><span className="strip-star" aria-hidden="true">✳</span></div>
+        <section id="take-your-seat" className="home-play">
+          <div className="section-heading"><div><span className="eyebrow">01 / TAKE YOUR SEAT</span><h2>There’s a game for every mood.</h2></div><p>Pick your way to play. <ArrowDown size={13}/></p></div>
+          <div className="mode-tabs" aria-label="Choose how to play">
+            {modes.map((item, i) => <button key={item.id} className={`mode-tab ${mode === item.id ? "selected" : ""}`} aria-pressed={mode === item.id} aria-controls={`mode-${item.id}`} onClick={() => selectMode(item.id)}><item.icon size={23} strokeWidth={1.4}/><span><strong>{item.title}</strong><small>{item.note}</small></span><span className="tab-number">0{i+1}</span></button>)}
           </div>
-          <h2 className="font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-            From first move to first win
-          </h2>
-          <p className="mt-4 text-ink-soft">
-            Three focused tools — no clutter, no theory dumps. Just clear movement
-            rules and a safe place to practice them.
-          </p>
-        </ScrollReveal>
-
-        <div className="grid gap-6 md:grid-cols-3">
-          {[
-            {
-              icon: Puzzle,
-              title: "Piece library",
-              desc: "Six cards — one per piece — each with a live board diagram of its legal moves and captures.",
-              to: "/training",
-              cta: "Open the library",
-            },
-            {
-              icon: Swords,
-              title: "Play the bot",
-              desc: "Put what you learned to the test. A real chess engine on the backend picks legal replies to your moves.",
-              to: "/bot",
-              cta: "Challenge the bot",
-            },
-            {
-              icon: GraduationCap,
-              title: "Learn at your pace",
-              desc: "Scroll-down reveals keep each lesson digestible — one concept per screen as you scroll.",
-              to: "/lobby",
-              cta: "See all modes",
-            },
-          ].map((feature, i) => (
-            <ScrollReveal key={feature.title} delay={i * 0.12}>
-              <Link
-                to={feature.to}
-                className="group flex h-full flex-col rounded-2xl border border-parchment bg-white p-7 shadow-[0_1px_2px_rgba(38,35,30,0.05)] transition-all duration-300 hover:-translate-y-1.5 hover:border-forest/30 hover:shadow-xl hover:shadow-forest/10"
-              >
-                <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-forest/10 text-forest transition-transform duration-300 group-hover:scale-110">
-                  <feature.icon size={22} />
-                </span>
-                <h3 className="font-display text-2xl font-semibold text-ink">{feature.title}</h3>
-                <p className="mt-2 flex-1 text-sm leading-relaxed text-ink-soft">{feature.desc}</p>
-                <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-forest transition-all group-hover:gap-3">
-                  {feature.cta} <ArrowRight size={15} />
-                </span>
-              </Link>
-            </ScrollReveal>
-          ))}
-        </div>
-      </section>
-
-      {/* ===== PIECE PREVIEW ===== */}
-      <section className="bg-forest-deep py-24 text-cream">
-        <div className="mx-auto max-w-6xl px-5">
-          <ScrollReveal className="mb-14 text-center">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gold">
-              The lineup
-            </span>
-            <h2 className="mt-3 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-              Six pieces. Six personalities.
-            </h2>
-          </ScrollReveal>
-
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            {PIECES.map((piece, i) => (
-              <ScrollReveal key={piece.type} delay={i * 0.07} y={24}>
-                <div className="group flex flex-col items-center rounded-2xl border border-cream/10 bg-cream/5 p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-gold/40 hover:bg-cream/10">
-                  <span
-                    className="flex h-14 w-14 items-center justify-center rounded-full text-4xl transition-transform duration-300 group-hover:scale-110"
-                    style={{ backgroundColor: `${piece.accent}30` }}
-                  >
-                    {piece.glyph}
-                  </span>
-                  <span className="mt-3 font-display text-lg font-semibold">{piece.name}</span>
-                  <span className="mt-1 text-[11px] leading-snug text-cream/60">{piece.tagline}</span>
-                </div>
-              </ScrollReveal>
-            ))}
+          {/* Keep an active game mounted when exploring other modes. */}
+          <div id="mode-bot" hidden={mode !== "bot"}>
+            <Bot embedded />
           </div>
-
-          <ScrollReveal delay={0.15} className="mt-12 text-center">
-            <Link
-              to="/training"
-              className="inline-flex items-center gap-2 rounded-full bg-gold px-8 py-3.5 text-sm font-semibold text-forest-deep shadow-lg transition-all hover:bg-cream active:scale-[0.98]"
-            >
-              Explore every piece <ArrowRight size={16} />
-            </Link>
-          </ScrollReveal>
-        </div>
-      </section>
-
-      {/* ===== CTA ===== */}
-      <section className="mx-auto max-w-6xl px-5 py-24">
-        <ScrollReveal>
-          <div className="relative overflow-hidden rounded-3xl bg-forest px-8 py-16 text-center text-cream shadow-[0_30px_80px_-30px_rgba(35,70,58,0.6)] sm:px-16">
-            <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-gold/20 blur-2xl" />
-            <div className="pointer-events-none absolute -bottom-16 -right-16 h-56 w-56 rounded-full bg-terracotta/25 blur-2xl" />
-            <h2 className="relative font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-              Ready to make your first move?
-            </h2>
-            <p className="relative mx-auto mt-4 max-w-md text-cream/80">
-              Learn all six pieces in under ten minutes — then test yourself against
-              the bot in the lobby.
-            </p>
-            <Link
-              to="/lobby"
-              className="relative mt-8 inline-flex items-center gap-2 rounded-full bg-cream px-8 py-3.5 text-sm font-semibold text-forest-deep shadow-md transition-all hover:bg-gold active:scale-[0.98]"
-            >
-              Go to the lobby <ArrowRight size={16} />
-            </Link>
+          <div id="mode-friend" hidden={mode !== "friend"}>
+            {mode === "friend" && <div className="friend-layout"><div className="friend-intro"><span className="eyebrow">BETTER WITH COMPANY</span><h3>A familiar face.<br/><em>A fresh challenge.</em></h3><p>One invite link is all it takes. Choose your clock, pick a side, and meet your friend on the board.</p><div className="friend-pieces" aria-hidden="true">♔ ♚</div><span className="eyebrow">LIVE GAMES · NO ACCOUNT NEEDED</span></div><Lobby embedded /></div>}
           </div>
-        </ScrollReveal>
-      </section>
-
+          <div id="mode-learn" hidden={mode !== "learn"}>
+            {mode === "learn" && <div className="learn-panel"><div><span className="eyebrow">SIX PIECES. ENDLESS POSSIBILITIES.</span><h3>Every great game<br/>starts with the basics.</h3><p>Discover how each piece moves, where it can capture, and what makes it special. All six interactive lessons are waiting for you.</p><Link className="editorial-button" to="/training">Open the piece library <ArrowRight size={16}/></Link></div><div className="learn-lineup">{PIECES.map(piece => <Link to={`/training?piece=${piece.type}`} key={piece.type}><span>{piece.glyph}</span><strong>{piece.name}</strong><small>{piece.tagline}</small></Link>)}</div></div>}
+          </div>
+        </section>
+        <section className="home-learn">
+          <div className="learn-intro"><span className="eyebrow">02 / STAY CURIOUS</span><h2>Better, one<br/><em>move at a time.</em></h2><p>There’s always something new on the board.</p><Link to="/training" className="editorial-text-link">Explore the lessons <ArrowRight size={14}/></Link></div>
+          <Link to="/training" className="lesson-card"><div className="lesson-art"><BoardDiagram piece={PIECES[1]}/></div><div className="lesson-copy"><span className="eyebrow">THE FOUNDATIONS / 01</span><h3>Meet your pieces <ArrowRight size={18}/></h3><p>Six personalities. Find out what makes each one move.</p></div></Link>
+          <Link to="/bot" className="practice-card"><span className="eyebrow">A LITTLE PRACTICE GOES A LONG WAY</span><span className="practice-piece" aria-hidden="true">♞</span><div><span className="practice-tag">FIVE DIFFICULTY LEVELS</span><h3>Make room<br/>for a little play.</h3><p>A worthy opponent, at your own pace.</p><span className="practice-link">Challenge the bot <ArrowRight size={16}/></span></div></Link>
+        </section>
+        <div className="closing-note"><span aria-hidden="true">♜</span><p>Not every move has to be brilliant.<br/><em>Sometimes, it just has to be yours.</em></p><small>a1 — h8</small></div>
+      </main>
       <Footer />
     </div>
   );

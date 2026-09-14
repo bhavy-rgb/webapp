@@ -1,4 +1,4 @@
-import { motion, type Variants } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import type { ReactNode } from "react";
 
@@ -19,6 +19,7 @@ export function ScrollReveal({
   direction = "up",
   once = true,
 }: ScrollRevealProps) {
+  const reducedMotion = useReducedMotion();
   const { ref, inView } = useInView({ triggerOnce: once, threshold: 0.15, rootMargin: "0px 0px -40px 0px" });
 
   const offset =
@@ -39,10 +40,10 @@ export function ScrollReveal({
     <motion.div
       ref={ref}
       className={className}
-      initial="hidden"
-      animate={inView ? "visible" : "hidden"}
+      initial={reducedMotion ? false : "hidden"}
+      animate={reducedMotion || inView ? "visible" : "hidden"}
       variants={variants}
-      transition={{ duration: 0.6, delay, ease: [0.23, 1, 0.32, 1] }}
+      transition={{ duration: reducedMotion ? 0 : 0.6, delay: reducedMotion ? 0 : delay, ease: [0.23, 1, 0.32, 1] }}
     >
       {children}
     </motion.div>

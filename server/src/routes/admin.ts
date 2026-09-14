@@ -16,6 +16,7 @@
  *
  * Every mutating admin action is itself audit-logged.
  */
+import { ADMIN_USERNAME } from "../config.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -124,6 +125,9 @@ router.patch("/users/:id", (req: AuthRequest, res: Response) => {
   if (id === req.user!.id && !isAdmin) {
     return res.status(400).json({ message: "You can't remove admin from yourself" });
   }
+  if (!isAdmin && jsonUserStore.findById(id)?.username === ADMIN_USERNAME) {
+    return res.status(400).json({ message: "The provisioned administrator cannot be demoted" });
+  }
   const updated = jsonUserStore.setAdmin(id, isAdmin);
   adminAudit(req, "admin.user.setAdmin", id, !!updated, { isAdmin });
   if (!updated) return res.status(404).json({ message: "User not found" });
@@ -137,6 +141,9 @@ router.delete("/users/:id", (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   if (id === req.user!.id) {
     return res.status(400).json({ message: "You can't delete yourself" });
+  }
+  if (jsonUserStore.findById(id)?.username === ADMIN_USERNAME) {
+    return res.status(400).json({ message: "The provisioned administrator cannot be deleted" });
   }
   const ok = jsonUserStore.remove(id);
   adminAudit(req, "admin.user.delete", id, ok);

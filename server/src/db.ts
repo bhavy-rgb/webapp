@@ -21,6 +21,7 @@ export interface User {
   passwordHash: string;
   createdAt: string;
   isAdmin: boolean;
+  sessionVersion?: number;
 }
 
 export interface PublicUser {
@@ -38,6 +39,7 @@ export interface UserStore {
   create(input: { username: string; email: string; passwordHash: string; isAdmin?: boolean }): User;
   listAll(): User[];
   setAdmin(id: string, isAdmin: boolean): User | undefined;
+  updateCredentials(id: string, username: string, passwordHash: string): User | undefined;
   remove(id: string): boolean;
 }
 
@@ -100,6 +102,19 @@ export const jsonUserStore: UserStore = {
     const user = db.users.find((u) => u.id === id);
     if (!user) return undefined;
     user.isAdmin = isAdmin;
+    writeDb(db);
+    return user;
+  },
+  updateCredentials(id: string, username: string, passwordHash: string) {
+    const db = readDb();
+    const user = db.users.find((u) => u.id === id);
+    if (!user) return undefined;
+    if (db.users.some((u) => u.id !== id && u.username.toLowerCase() === username.toLowerCase())) {
+      throw new Error("Username already taken");
+    }
+    user.username = username;
+    user.passwordHash = passwordHash;
+    user.sessionVersion = (user.sessionVersion ?? 0) + 1;
     writeDb(db);
     return user;
   },

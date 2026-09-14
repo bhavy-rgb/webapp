@@ -1,3 +1,4 @@
+import { ADMIN_USERNAME } from "../config.js";
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
@@ -52,6 +53,9 @@ router.post("/signup", authLimiter, async (req, res) => {
   const cleanUsername = username.trim();
   const cleanEmail = email.trim().toLowerCase();
 
+  if (cleanUsername.toUpperCase() === ADMIN_USERNAME) {
+    return res.status(409).json({ message: "That username is reserved" });
+  }
   if (store.findByUsername(cleanUsername)) {
     return res.status(409).json({ message: "That username is already taken" });
   }
@@ -61,12 +65,8 @@ router.post("/signup", authLimiter, async (req, res) => {
 
   try {
     const passwordHash = await bcrypt.hash(password, 10);
-    // Bootstrap admin: if the ADMIN_USERNAME env var matches this username,
-    // the account is created with admin rights (further admins are promoted
-    // from the admin panel).
-    const isAdmin =
-      !!process.env.ADMIN_USERNAME &&
-      cleanUsername.toLowerCase() === process.env.ADMIN_USERNAME.toLowerCase();
+    // Public signup never grants administrative privileges.
+    const isAdmin = false;
     const user = store.create({
       username: cleanUsername,
       email: cleanEmail,
