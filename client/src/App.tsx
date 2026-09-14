@@ -21,22 +21,9 @@ export default function App() {
         <ScrollToTop />
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/home"
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            }
-          />
+          {/* Public marketing page; training and account routes retain their guards. */}
+          <Route path="/" element={<Home />} />
+          <Route path="/home" element={<Home />} />
           {/* Open to guests — login is not required to play */}
           <Route path="/lobby" element={<Lobby />} />
           <Route

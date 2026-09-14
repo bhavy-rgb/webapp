@@ -52,3 +52,81 @@ body {
 ::selection {
   background: color-mix(in srgb, var(--color-terracotta) 30%, transparent);
 }
+
+/* The mark lands once on mount. A separate wrapper keeps hover independent. */
+.logo-rook-hover { display: inline-flex; color: var(--color-forest); transition: transform 180ms ease; }
+.logo-rook { animation: dropRook 780ms cubic-bezier(.32, 0, .72, 1) both; transform-origin: center bottom; }
+.chess-logo:hover .logo-rook-hover, .chess-logo:focus-visible .logo-rook-hover { transform: translateY(-3px); }
+@keyframes dropRook {
+  0% { transform: translateY(-120px); opacity: 0; }
+  18% { opacity: 1; }
+  60% { transform: translateY(2px) scaleY(.94); opacity: 1; }
+  77% { transform: translateY(-7px) scaleY(1.02); }
+  90% { transform: translateY(1px) scaleY(.98); }
+  100% { transform: translateY(0) scaleY(1); opacity: 1; }
+}
+.chessify-home { --chess-beige: #f0d9b5; --chess-wood: #b58863; background: #151715; color: #eeeae2; min-height: 100vh; }
+.chessify-home a:focus-visible, .chessify-home button:focus-visible { outline: 2px solid var(--chess-beige); outline-offset: 6px; }
+.chess-navbar { --color-cream: #151715; --color-ink: #eeeae2; --color-ink-soft: #a8aba4; --color-parchment: #30332d; --color-forest: #f0d9b5; --color-terracotta: #f0d9b5; --rook-detail: #151715; background: #151715ed; border-bottom: 1px solid #ffffff0c; }
+.chess-navbar nav { max-width: 1320px; height: 96px; padding: 0 48px; }
+.chess-navbar .chess-logo { gap: 12px; }
+.chess-navbar .chess-logo > span:last-child { font-family: var(--font-body); font-size: 25px; letter-spacing: -1px; font-weight: 650; }
+.chess-navbar nav > div:nth-child(2) { gap: 13px; }
+.chess-navbar nav > div:nth-child(2) a { background: transparent; color: #a8aba4; border-radius: 0; padding: 12px 9px; font-size: 13px; }
+.chess-navbar nav > div:nth-child(2) a[aria-current="page"] { color: #f0d9b5; position: relative; }
+.chess-navbar nav > div:nth-child(2) a[aria-current="page"]::after { content: ""; position: absolute; bottom: 1px; left: calc(50% - 2px); width: 4px; height: 4px; background: #f0d9b5; border-radius: 50%; }
+.chess-navbar nav > div:nth-child(2) a:hover { color: #f0d9b5; }
+.chess-navbar nav > div:nth-child(3) > a { background: transparent; border: 1px solid #6b6659; color: #f0d9b5; border-radius: 5px; padding: 10px 25px; font-size: 12px; }
+.chess-navbar nav > div:nth-child(3) > a:hover { background: #f0d9b510; border-color: #f0d9b5; }
+.chess-hero { position: relative; max-width: 1320px; margin: auto; padding: 148px 48px 0; display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
+.hero-copy { position: relative; z-index: 1; padding: 16px 0 52px; }
+.hero-eyebrow { display: flex; align-items: center; gap: 11px; color: #c6b498; font-size: 9px; letter-spacing: 2.2px; font-weight: 500; margin-bottom: 28px; }
+.hero-eyebrow > span { width: 6px; height: 6px; border-radius: 50%; background: #b58863; box-shadow: 0 0 0 4px #b5886312; }
+.hero-copy h1 { font-family: var(--font-display); font-size: clamp(68px, 6.4vw, 88px); font-weight: 400; line-height: 1.055; letter-spacing: -3.5px; }
+.hero-copy h1 em { color: #f0d9b5; font-weight: 350; }
+.hero-description { color: #9b9e96; font-size: 14px; line-height: 1.9; margin-top: 26px; }
+.hero-actions { display: flex; gap: 12px; margin-top: 31px; align-items: center; }
+.chess-button { display: inline-flex; gap: 15px; align-items: center; justify-content: center; padding: 16px 20px; border-radius: 4px; font-size: 12px; font-weight: 550; transition: background 180ms, transform 180ms; }
+.chess-button:hover { transform: translateY(-2px); }
+.chess-button.primary { background: #f0d9b5; color: #25251f; }
+.chess-button.primary:hover { background: #f8e7cf; }
+.chess-button.secondary { border: 1px solid #42433b; color: #ddd7cc; }
+.chess-button.secondary:hover { background: #ffffff08; }
+.hero-reassurance { display: flex; gap: 15px; align-items: center; color: #92968c; font-size: 10px; margin-top: 21px; }
+.hero-reassurance span { display: flex; gap: 6px; align-items: center; }
+.hero-reassurance svg { color: #b5bda4; }
+.hero-reassurance i { height: 3px; width: 3px; background: #676b61; border-radius: 50%; }
+.hero-visual { align-self: stretch; position: relative; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.art-caption { position: absolute; top: 8px; right: 5px; display: flex; gap: 12px; align-items: center; color: #85887e; font-size: 8px; letter-spacing: 2.4px; }
+.caption-line { width: 30px; height: 1px; background: #8e806b; }
+.rook-artwork { width: calc(100% + 45px); max-width: none; margin: -24px -25px -30px; }
+.piece-caption { display: flex; gap: 20px; align-items: center; margin: 0 24px 43px 63px; padding-top: 18px; border-top: 1px solid #ffffff12; }
+.piece-caption > span:first-child { color: #777e71; font-size: 10px; letter-spacing: 2px; }
+.piece-caption strong { color: #e4dbc9; font-size: 12px; font-weight: 500; }
+.piece-caption p { font-size: 10px; color: #898e82; margin-top: 4px; }
+.piece-value { margin-left: auto; border: 1px solid #5b5b4c; color: #cab99b; font-family: var(--font-display); font-style: italic; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; }
+.hero-bottom { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #ffffff12; padding: 25px 0; color: #7d8376; font-size: 8px; letter-spacing: 1.7px; }
+.hero-bottom a { display: flex; align-items: center; gap: 12px; font-size: 10px; letter-spacing: .2px; color: #a5a89c; }
+.hero-bottom a:hover { color: #f0d9b5; }
+.small-board { width: 16px; height: 16px; background: conic-gradient(#7c7562 25%, transparent 0 50%, #7c7562 0 75%, transparent 0); background-size: 8px 8px; }
+.chess-explore { scroll-margin-top: 110px; padding: 59px 48px 72px; max-width: 1320px; margin: auto; }
+.explore-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.explore-heading > span { color: #858b7c; font-size: 8px; letter-spacing: 1.8px; }
+.explore-heading h2 { font-family: var(--font-display); font-size: 25px; font-weight: 350; letter-spacing: -.5px; }
+.explore-heading h2 em { color: #b2a58e; }
+.chess-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.chess-feature { background: #1c1f1b; border: 1px solid #ffffff0b; border-radius: 6px; padding: 25px 27px; transition: border-color 180ms, background 180ms; }
+.chess-feature:hover { background: #23271f; border-color: #b5886370; }
+.feature-top { display: flex; justify-content: space-between; align-items: center; color: #c8b596; margin-bottom: 25px; }
+.feature-top > span { color: #676f60; font-size: 9px; }
+.chess-feature h3 { font-family: var(--font-display); font-weight: 400; font-size: 22px; letter-spacing: -.3px; }
+.chess-feature p { color: #949b8c; font-size: 12px; line-height: 1.8; margin: 10px 0 22px; max-width: 260px; }
+.feature-link { display: flex; align-items: center; justify-content: space-between; color: #c6b89e; font-size: 11px; }
+.chess-footer { max-width: 1224px; margin: auto; border-top: 1px solid #ffffff10; padding: 26px 0; display: flex; justify-content: space-between; font-size: 10px; color: #929889; }
+.chess-footer > div { display: flex; gap: 22px; }
+.footer-divider { margin: 0 12px; color: #4f5549; }
+.chess-footer a:hover { color: #f0d9b5; }
+@media (min-width: 1450px) { .chess-hero { padding-top: 172px; } .hero-copy { padding-bottom: 70px; } }
+@media (max-width: 1100px) { .chess-navbar nav { padding: 0 32px; } .chess-hero { padding-left: 32px; padding-right: 32px; } .hero-copy h1 { font-size: 72px; } .hero-actions { gap: 8px; } .chess-button { padding: 14px 13px; gap: 9px; font-size: 11px; } .piece-caption { margin-left: 30px; } .chess-explore { padding-left: 32px; padding-right: 32px; } .chess-footer { margin: 0 32px; } }
+@media (max-width: 767px) { .chess-navbar nav { height: 78px; padding: 0 24px; } .chess-navbar .chess-logo > span:last-child { font-size: 23px; } .chess-hero { grid-template-columns: 1fr; padding: 126px 24px 0; } .hero-copy { padding: 0; } .hero-eyebrow { font-size: 8px; letter-spacing: 1.6px; margin-bottom: 24px; } .hero-copy h1 { font-size: clamp(64px, 12vw, 90px); } .hero-description { font-size: 13px; } .hero-actions { flex-wrap: wrap; gap: 10px; } .chess-button { padding: 15px 16px; font-size: 11px; } .hero-visual { margin-top: 38px; } .art-caption { right: 0; top: 0; } .rook-artwork { width: 100%; margin: -15px 0 -20px; } .piece-caption { margin: 0 10px 32px; } .hero-bottom { padding: 23px 0; } .hero-bottom > span:first-child { font-size: 7px; letter-spacing: .8px; } .small-board { display: none; } .chess-explore { padding: 42px 24px; } .explore-heading { display: block; } .explore-heading h2 { margin-top: 14px; font-size: 24px; } .chess-features { grid-template-columns: 1fr; gap: 14px; } .chess-feature { padding: 24px; } .chess-feature p { max-width: none; } .feature-top { margin-bottom: 18px; } .chess-footer { margin: 0 24px; flex-direction: column; gap: 18px; padding: 24px 0; } .desktop-break { display: none; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .logo-rook { animation: none; opacity: 1; transform: none; } .logo-rook-hover, .chess-button, .chess-feature { transition: none; } .chess-logo:hover .logo-rook-hover, .chess-logo:focus-visible .logo-rook-hover, .chess-button:hover { transform: none; } }

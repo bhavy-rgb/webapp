@@ -10,7 +10,7 @@ const baseLinks = [
   { to: "/bot", label: "Play Bot" },
 ];
 
-export default function Navbar() {
+export default function Navbar({ dark = false }: { dark?: boolean }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const { user, logout } = useAuth();
@@ -37,16 +37,19 @@ export default function Navbar() {
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+      className={`${dark ? "chess-navbar" : ""} fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         scrolled || open
           ? "bg-cream/90 backdrop-blur-xl shadow-[0_1px_0_0_rgba(38,35,30,0.08)]"
           : "bg-transparent"
       }`}
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-        <Link to="/home" className="group flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-forest text-xl text-cream shadow-sm transition-transform group-hover:-rotate-6">
-            ♞
+        <Link to="/home" className="chess-logo group flex items-center gap-2.5" aria-label="Chessify home">
+          <span className="logo-rook-hover" aria-hidden="true">
+            <svg className="logo-rook" width="30" height="34" viewBox="0 0 32 36" fill="currentColor">
+              <path d="M5 3h5v5h4V3h4v5h4V3h5v11l-4 3 1 10H8l1-10-4-3V3Zm3 26h16l3 4H5l3-4Z" />
+              <path d="M10 18h12" fill="none" stroke="var(--rook-detail, #faf6ef)" strokeWidth="1.5" />
+            </svg>
           </span>
           <span className="font-display text-2xl font-semibold tracking-tight text-ink">
             Chessify
@@ -102,6 +105,8 @@ export default function Navbar() {
           onClick={() => setOpen((v) => !v)}
           className="rounded-lg p-2 text-ink md:hidden"
           aria-label="Toggle menu"
+          aria-expanded={open}
+          aria-controls="mobile-navigation"
         >
           {open ? <X size={22} /> : <Menu size={22} />}
         </button>
@@ -109,7 +114,7 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <div className="border-t border-parchment bg-cream/95 backdrop-blur-xl md:hidden">
+        <div id="mobile-navigation" className="border-t border-parchment bg-cream/95 backdrop-blur-xl md:hidden">
           <div className="mx-auto flex max-w-6xl flex-col gap-1 px-5 py-4">
             {links.map((link) => (
               <NavLink
