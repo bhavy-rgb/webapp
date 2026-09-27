@@ -10,8 +10,7 @@
 //! Works on both native and wasm32 targets (clock via `timer::now_ms`).
 
 use crate::board::*;
-use crate::eval::{piece_value, MATE};
-use crate::techniques::Profile;
+use crate::eval::{evaluate, piece_value, MATE};
 use crate::movegen::{in_check, legal_moves, make_move};
 use crate::timer::now_ms;
 use crate::zobrist::hash;
@@ -67,7 +66,6 @@ impl Tt {
 }
 
 struct Ctx {
-    profile: Profile,
     nodes: u64,
     start_ms: f64,
     time_limit_ms: f64,
@@ -145,7 +143,7 @@ fn quiescence(b: &Board, mut alpha: i32, beta: i32, ctx: &mut Ctx) -> i32 {
         return alpha;
     }
 
-    let stand_pat = ctx.profile.evaluate(b);
+    let stand_pat = evaluate(b);
     if stand_pat >= beta {
         return beta;
     }
@@ -193,7 +191,7 @@ fn negamax(
     ctx.nodes += 1;
     ctx.check_time();
     if ctx.stop || ply >= MAX_PLY - 1 {
-        return ctx.profile.evaluate(b);
+        return evaluate(b);
     }
 
     if b.halfmove >= 100 {
@@ -347,20 +345,7 @@ pub fn search_with_history(
     time_limit_ms: u128,
     game_hashes: &[u64],
 ) -> SearchResult {
-    search_with_profile(b, max_depth, time_limit_ms, game_hashes, Profile::Legacy)
-}
-
-/// Additive evaluation profile; pruning, ordering and difficulty remain unchanged.
-/// Each search owns its TT, so entries never leak between profiles.
-pub fn search_with_profile(
-    b: &Board,
-    max_depth: u32,
-    time_limit_ms: u128,
-    game_hashes: &[u64],
-    profile: Profile,
-) -> SearchResult {
     let mut ctx = Ctx {
-        profile,
         nodes: 0,
         start_ms: now_ms(),
         time_limit_ms: time_limit_ms as f64,

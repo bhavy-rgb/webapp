@@ -27,3 +27,6 @@ Thumbs.db
 
 # Rust build artifacts
 bot/target/
+
+# Vite cache
+client/.vite/

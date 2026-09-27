@@ -1,4 +1,3 @@
-import { ADMIN_USERNAME } from "../config.js";
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
@@ -53,21 +52,22 @@ router.post("/signup", authLimiter, async (req, res) => {
   const cleanUsername = username.trim();
   const cleanEmail = email.trim().toLowerCase();
 
-  if (cleanUsername.toUpperCase() === ADMIN_USERNAME) {
-    return res.status(409).json({ message: "That username is reserved" });
-  }
-  if (store.findByUsername(cleanUsername)) {
+  if (await store.findByUsername(cleanUsername)) {
     return res.status(409).json({ message: "That username is already taken" });
   }
-  if (store.findByEmail(cleanEmail)) {
+  if (await store.findByEmail(cleanEmail)) {
     return res.status(409).json({ message: "An account with that email already exists" });
   }
 
   try {
     const passwordHash = await bcrypt.hash(password, 10);
-    // Public signup never grants administrative privileges.
-    const isAdmin = false;
-    const user = store.create({
+    // Bootstrap admin: if the ADMIN_USERNAME env var matches this username,
+    // the account is created with admin rights (further admins are promoted
+    // from the admin panel).
+    const isAdmin =
+      !!process.env.ADMIN_USERNAME &&
+      cleanUsername.toLowerCase() === process.env.ADMIN_USERNAME.toLowerCase();
+    const user = await store.create({
       username: cleanUsername,
       email: cleanEmail,
       passwordHash,
@@ -98,8 +98,8 @@ router.post("/login", authLimiter, async (req, res) => {
     return res.status(400).json({ message: "Username/email and password are required" });
   }
 
-  const byUsername = store.findByUsername(identifier.trim());
-  const byEmail = store.findByEmail(identifier.trim().toLowerCase());
+  const byUsername = await store.findByUsername(identifier.trim());
+  const byEmail = await store.findByEmail(identifier.trim().toLowerCase());
   const user = byUsername ?? byEmail;
 
   if (!user) {

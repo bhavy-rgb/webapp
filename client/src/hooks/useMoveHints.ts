@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import { Chess, type Square } from "chess.js";
 
 /**
@@ -17,24 +17,11 @@ import { Chess, type Square } from "chess.js";
 export function useMoveHints(fen: string) {
   const [dragFrom, setDragFrom] = useState<Square | null>(null);
 
-  useEffect(() => setDragFrom(null), [fen]);
-
   const onPieceDragBegin = useCallback((_piece: string, sourceSquare: Square) => {
     setDragFrom(sourceSquare);
   }, []);
 
   const clear = useCallback(() => setDragFrom(null), []);
-
-  // Tap a piece, then a legal destination: also works with touch screens.
-  const onSquareClick = (square: Square, move: (from: string, to: string) => boolean) => {
-    if (dragFrom && dragFrom !== square && move(dragFrom, square)) {
-      clear();
-      return;
-    }
-    const game = new Chess(fen);
-    const piece = game.get(square);
-    setDragFrom(piece?.color === game.turn() && square !== dragFrom ? square : null);
-  };
 
   const customSquareStyles = useMemo(() => {
     if (!dragFrom) return {};
@@ -65,5 +52,5 @@ export function useMoveHints(fen: string) {
     return styles;
   }, [dragFrom, fen]);
 
-  return { onSquareClick, onPieceDragBegin, onPieceDragEnd: clear, customSquareStyles, clear };
+  return { onPieceDragBegin, onPieceDragEnd: clear, customSquareStyles, clear };
 }

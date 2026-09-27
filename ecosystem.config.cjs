@@ -10,8 +10,7 @@ module.exports = {
       args: "tsx src/index.ts",
       env: {
         CHESSIFY_PORT: 3001,
-        // JWT_SECRET and ADMIN_PASSWORD_HASH come from private .env or the host.
-        // The administrator username is fixed server-side to ARISE.
+        JWT_SECRET: "sandbox-dev-secret",
       },
       watch: false,
       instances: 1,
