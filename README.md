@@ -12,7 +12,7 @@ cp .env.example .env   # then edit JWT_SECRET
 npm run dev        # runs server (:3001) + client (:5173) together
 ```
 
-Open http://localhost:5173, create an account, and head to **Training**.
+ create an account, and head to **Training**.
 
 ## Play a friend (1v1 via link)
 
