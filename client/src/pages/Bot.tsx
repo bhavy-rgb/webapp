@@ -36,6 +36,7 @@ export default function Bot() {
   const [evalCp, setEvalCp] = useState(0); // centipawns, white perspective
   const [engineInfo, setEngineInfo] = useState<string | null>(null);
   const requestSeq = useRef(0);
+  const activeSearch = useRef<number | null>(null);
   const boardWrapRef = useRef<HTMLDivElement>(null);
   const [boardWidth, setBoardWidth] = useState(480);
   // Engine evaluation after each position — submitted with the game so the
@@ -45,6 +46,11 @@ export default function Bot() {
 
   useEffect(() => {
     engine.warmUp();
+    return () => {
+      requestSeq.current++;
+      activeSearch.current = null;
+      engine.dispose();
+    };
   }, []);
 
   const refresh = () => {
@@ -62,14 +68,18 @@ export default function Bot() {
   };
 
   const updateEval = (currentFen: string, turn: PlayerColor) => {
+    const seq = requestSeq.current;
+    const g = gameRef.current;
+    const moveNumber = g.history().length;
     engine
       .evaluate(currentFen)
       .then((cp) => {
+        if (seq !== requestSeq.current || g !== gameRef.current || g.fen() !== currentFen) return;
         setEvalCp(turn === "w" ? cp : -cp);
         evalHistoryRef.current.push({
           fen: currentFen,
           evalCp: turn === "w" ? cp : -cp,
-          moveNumber: gameRef.current.history().length,
+          moveNumber,
         });
       })
       .catch(() => {});
@@ -119,18 +129,23 @@ export default function Bot() {
     }
   }
 
-  const botMove = async () => {
+  const botMove = async (humanColor: PlayerColor = playerColor) => {
     const g = gameRef.current;
-    if (g.isGameOver()) return;
+    if (g.isGameOver() || g.turn() === humanColor || activeSearch.current !== null) return;
     const seq = ++requestSeq.current;
+    const searchFen = g.fen();
+    const isCurrent = () => seq === requestSeq.current && g === gameRef.current && g.fen() === searchFen;
+    activeSearch.current = seq;
     setThinking(true);
     const uciHistory = g
       .history({ verbose: true })
       .map((m) => m.from + m.to + (m.promotion ?? ""))
       .join(" ");
     try {
-      const r = await engine.bestMove(g.fen(), level, uciHistory);
-      if (seq !== requestSeq.current) return; // stale (game was reset)
+      const r = await engine.bestMove(searchFen, level, uciHistory);
+      if (!isCurrent()) return;
+      // chess.js remains authoritative even if the engine returns bad data.
+      if (!r.bestmove) throw new Error("No legal bot reply returned");
       if (r.bestmove) {
         g.move({
           from: r.bestmove.slice(0, 2),
@@ -146,14 +161,17 @@ export default function Bot() {
         updateEval(g.fen(), g.turn() as PlayerColor);
       }
     } catch {
-      // Engine failed (no WASM support?) — random fallback keeps game playable.
+      // Never let a cancelled search play a fallback into a reset/resigned game.
+      if (!isCurrent()) return;
       const moves = g.moves({ verbose: true });
       if (moves.length > 0) {
         const m = moves[Math.floor(Math.random() * moves.length)];
-        g.move({ from: m.from, to: m.to, promotion: "q" });
+        g.move({ from: m.from, to: m.to, promotion: m.promotion });
+        setEngineInfo("Engine unavailable — played a quick legal reply.");
         refresh();
       }
     } finally {
+      if (activeSearch.current === seq) activeSearch.current = null;
       if (seq === requestSeq.current) setThinking(false);
     }
   };
@@ -164,7 +182,7 @@ export default function Bot() {
     hints.clear();
     if (status === "checkmate" || status === "draw" || status === "resigned") return false;
     const g = gameRef.current;
-    if (g.turn() !== playerColor || thinking) return false;
+    if (g.turn() !== playerColor || thinking || activeSearch.current !== null) return false;
 
     try {
       const result = g.move({ from: source, to: target, promotion: "q" });
@@ -174,9 +192,11 @@ export default function Bot() {
     }
 
     refresh();
-    updateEval(g.fen(), g.turn() as PlayerColor);
-    if (!gameRef.current.isGameOver()) {
+    if (!g.isGameOver()) {
+      // Prioritize the reply; don't queue a redundant evaluation before search.
       void botMove();
+    } else {
+      updateEval(g.fen(), g.turn() as PlayerColor);
     }
     return true;
   };
@@ -193,6 +213,11 @@ export default function Bot() {
 
   const startNewGame = (color: PlayerColor = playerColor) => {
     requestSeq.current++;
+    activeSearch.current = null;
+    engine.dispose(); // terminate old WASM search instead of queuing behind it
+    hints.clear();
+    setMoveInput("");
+    setMoveError("");
     gameRef.current = new Chess();
     evalHistoryRef.current = [];
     submittedRef.current = false;
@@ -204,14 +229,17 @@ export default function Bot() {
     setStatus("playing");
     setFen(gameRef.current.fen());
     if (color === "b") {
-      // Bot opens as White.
-      setTimeout(() => void botMove(), 250);
+      // Start immediately, with the new color (not a stale delayed closure).
+      void botMove(color);
     }
   };
 
   const resign = () => {
     if (status !== "playing" && status !== "check") return;
     requestSeq.current++;
+    activeSearch.current = null;
+    engine.dispose();
+    hints.clear();
     setThinking(false);
     setStatus("resigned");
     // The bot wins when you resign.
@@ -264,7 +292,8 @@ export default function Bot() {
     <main id="main-content" tabIndex={-1} className="page-width bot-main">
       <ScrollReveal className="bot-heading"><div><Link to="/lobby" className="bot-breadcrumb"><ArrowLeft size={14} /> Lobby <CaretRight size={12} /><span>Bot match</span></Link><h1 className="hero-heading">Your board. Your pace.</h1><p>A little challenge, without the pressure. Make your next move.</p></div><span className="practice-badge"><span className="status-dot" /> Practice mode</span></ScrollReveal>
       <div className="bot-workspace">
-        <ScrollReveal className="game-column">
+        {/* A filtered/transformed ancestor offsets react-chessboard's fixed drag layer. */}
+        <div className="game-column">
           <div className="game-player"><span className="player-avatar bot-avatar"><Robot size={24} /></span><div><h2>Chessify bot <span>{LEVELS[level].name}</span></h2><p>{thinking ? "Finding the next move…" : "Ready for a little friendly competition"}</p></div><span className="player-color">{playerColor === "w" ? "Black" : "White"}</span></div>
           <div className="game-board-frame">
             <div ref={boardWrapRef} className="game-board" aria-label="Chess board. Drag a piece to move, or use keyboard move entry below.">
@@ -276,7 +305,9 @@ export default function Bot() {
                 customSquareStyles={hints.customSquareStyles}
                 boardOrientation={playerColor === "w" ? "white" : "black"}
                 areArrowsAllowed={false}
-                arePiecesDraggable={!ended && !thinking}
+                arePiecesDraggable={!ended && !thinking && gameRef.current.turn() === playerColor}
+                isDraggablePiece={({ piece }) => piece[0] === playerColor}
+                autoPromoteToQueen
                 boardWidth={Math.min(boardWidth, 620)}
                 animationDuration={180}
                 customDarkSquareStyle={{ backgroundColor: "#899b73" }}
@@ -293,7 +324,7 @@ export default function Bot() {
             if (move && onPieceDrop(move.from, move.to)) { setMoveInput(""); setMoveError(""); }
             else setMoveError("That move is not available. Check the notation and whose turn it is.");
           }}><label htmlFor="keyboard-move">Enter a move, such as e4 or e2e4</label><div className="flex gap-2"><input id="keyboard-move" value={moveInput} onChange={event => setMoveInput(event.target.value)} aria-describedby={moveError ? "move-error" : undefined} aria-invalid={!!moveError} disabled={thinking || ended} autoComplete="off" /><button className="btn-secondary" disabled={thinking || ended || !moveInput.trim()}>Make move</button></div>{moveError && <p id="move-error" className="field-error" role="alert">{moveError}</p>}</form></details>
-        </ScrollReveal>
+        </div>
         <ScrollReveal delay={.1}><aside className="game-sidebar" aria-label="Game settings and moves">
           <section className="game-panel"><h2><SlidersHorizontal size={18} /> Your game <span>No timer</span></h2><fieldset><legend>Choose your challenge</legend><div className="difficulty-options">{LEVELS.map(l => <button key={l.id} onClick={() => setLevel(l.id)} aria-pressed={level === l.id}><span className="difficulty-bars" aria-hidden="true">{[0, 1, 2, 3, 4].map(bar => <span key={bar} className={bar <= l.id ? "filled" : ""} style={{ height: `${8 + bar * 2}px` }} />)}</span>{l.name}</button>)}</div><p className="setting-hint">{LEVELS[level].blurb.replace("A-game", "best game")}</p></fieldset><fieldset><legend>Your side of the board</legend><div className="color-options"><button onClick={() => startNewGame("w")} aria-pressed={playerColor === "w"}><span aria-hidden="true">♔</span> White</button><button onClick={() => startNewGame("b")} aria-pressed={playerColor === "b"}><span aria-hidden="true">♚</span> Black</button></div><p className="setting-hint">Changing color starts a new game.</p></fieldset><div className="game-actions"><button onClick={() => startNewGame()} className="btn-primary"><ArrowCounterClockwise size={16} /> New game</button><button onClick={resign} disabled={ended} className="btn-secondary"><Flag size={16} /> Resign</button></div></section>
           <section className="game-panel history-panel"><h2><ListNumbers size={18} /> Move history <span>{history.length} moves</span></h2>
