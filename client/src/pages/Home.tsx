@@ -1,233 +1,94 @@
+import { useRef } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowRight, ChevronDown, GraduationCap, Puzzle, Swords } from "lucide-react";
+import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { ArrowRight, ArrowUpRight, BookOpen, Check, Plus, Robot, UsersThree } from "@phosphor-icons/react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import HeroVideo from "@/components/HeroVideo";
+import BoardPreview from "@/components/BoardPreview";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { PIECES } from "@/lib/pieces";
 import { BoardDiagram } from "@/components/BoardDiagram";
 
+const faqs = [
+  ["Is Chessify suitable for complete beginners?", "Yes. Start with the piece library to see how each of the six pieces moves and captures. Then try the bot at Beginner difficulty, with no clock to rush you."],
+  ["Do I need to create an account?", "You can play the bot and invite a friend without an account. Create an account to access Home and the training library."],
+  ["Can I choose how strong the bot is?", "Yes. Choose Beginner, Casual, Club, Strong, or Max. You can adjust the difficulty during a game; your choice applies to the next engine search."],
+  ["Can I play with the black pieces?", "Yes. Choose Black in the bot settings and the bot makes the first move. Changing your color starts a new game."],
+  ["How do I play with a friend?", "Open the lobby and choose Play a friend. Pick a time control, create a game, and share the invite link or game code. Your friend can join as a guest."],
+  ["What powers the chess bot?", "Chessify uses a Rust chess engine compiled to WebAssembly. It runs in a browser worker, so the board stays responsive while it searches for a move."],
+];
+
+function TaglineWord({ children, index, count, progress }: { children: string; index: number; count: number; progress: ReturnType<typeof useScroll>["scrollYProgress"] }) {
+  const opacity = useTransform(progress, [index / count, (index + 1) / count], [.3, 1]);
+  const reducedMotion = useReducedMotion();
+  return <motion.span className="tagline-word" style={{ opacity: reducedMotion ? 1 : opacity }}>{children}{" "}</motion.span>;
+}
+
+function Tagline() {
+  const ref = useRef<HTMLElement>(null);
+  // Framer schedules scroll interpolation through requestAnimationFrame, never a raw scroll handler.
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start 85%", "end 60%"] });
+  const lines = ["Less second guessing.", "More good moves."];
+  const count = lines.join(" ").split(" ").length;
+  let index = 0;
+  return <section ref={ref} className="tagline-section section-space" aria-labelledby="tagline-title"><div className="page-width">
+    <p className="eyebrow justify-center">Make room for a better game</p>
+    <h2 id="tagline-title" className="tagline-heading">{lines.map(line => <span className="block" key={line}>{line.split(" ").map(word => <TaglineWord key={word} index={index++} count={count} progress={scrollYProgress}>{word}</TaglineWord>)}</span>)}</h2>
+    <p className="mt-6 text-ink-soft">You don’t need to know every opening. Just start with your next move.</p>
+  </div></section>;
+}
+
 export default function Home() {
-  return (
-    <div className="grain min-h-screen bg-cream">
-      <Navbar />
-
-      {/* ===== HERO ===== */}
-      <section className="relative flex min-h-screen flex-col justify-center overflow-hidden pt-24">
-        <div className="pointer-events-none absolute -right-40 top-10 h-[28rem] w-[28rem] rounded-full bg-forest/10 blur-3xl" />
-        <div className="pointer-events-none absolute -left-40 bottom-10 h-[24rem] w-[24rem] rounded-full bg-terracotta/10 blur-3xl" />
-
-        <div className="relative mx-auto w-full max-w-6xl px-5">
-          <div className="grid items-center gap-12 lg:grid-cols-2">
-            <div>
-              <motion.span
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1, duration: 0.5 }}
-                className="inline-flex items-center gap-2 rounded-full border border-forest/20 bg-forest/5 px-4 py-1.5 text-xs font-semibold text-forest"
-              >
-                <GraduationCap size={14} /> Learn chess, piece by piece
-              </motion.span>
-
-              <motion.h1
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-                className="mt-6 font-display text-6xl font-semibold leading-[0.95] tracking-tight text-ink sm:text-7xl"
-              >
-                Every piece,
-                <br />
-                <span className="italic text-forest">one clear move.</span>
-              </motion.h1>
-
-              <motion.p
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35, duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-                className="mt-6 max-w-md text-lg leading-relaxed text-ink-soft"
-              >
-                Stop guessing how the knight moves. Chessify shows you every legal
-                move of every piece on a real board — then lets you practice
-                against a bot.
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-                className="mt-9 flex flex-wrap gap-3"
-              >
-                <Link
-                  to="/training"
-                  className="inline-flex items-center gap-2 rounded-full bg-forest px-7 py-3.5 text-sm font-semibold text-cream shadow-md transition-all hover:bg-forest-deep hover:shadow-lg active:scale-[0.98]"
-                >
-                  Start training <ArrowRight size={16} />
-                </Link>
-                <Link
-                  to="/lobby"
-                  className="inline-flex items-center gap-2 rounded-full border border-forest/25 px-7 py-3.5 text-sm font-semibold text-forest transition-all hover:border-forest hover:bg-forest/5"
-                >
-                  Enter the lobby
-                </Link>
-              </motion.div>
-            </div>
-
-            {/* 3D hero video (lazy-loaded, subtle scroll parallax) */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.45, duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
-              className="mx-auto w-full max-w-xl"
-            >
-              <HeroVideo />
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Scroll cue */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.1, duration: 0.6 }}
-          className="absolute bottom-7 left-1/2 -translate-x-1/2"
-        >
-          <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-            className="flex flex-col items-center gap-1 text-ink-soft/70"
-          >
-            <span className="text-[10px] font-semibold uppercase tracking-widest">Scroll</span>
-            <ChevronDown size={18} />
-          </motion.div>
-        </motion.div>
-      </section>
-
-      {/* ===== FEATURES ===== */}
-      <section className="mx-auto max-w-6xl px-5 py-24">
-        <ScrollReveal className="mx-auto mb-14 grid max-w-xl place-items-center gap-8 text-center">
-          <div className="w-full max-w-[280px] rounded-3xl border border-parchment bg-white p-5 shadow-[0_20px_60px_-20px_rgba(38,35,30,0.2)]">
-            <BoardDiagram piece={PIECES[1]} />
-            <p className="mt-3 text-center text-sm font-medium text-ink-soft">
-              The knight — <span className="text-ink">an L-shape, every time.</span>
-            </p>
-          </div>
-          <h2 className="font-display text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-            From first move to first win
-          </h2>
-          <p className="mt-4 text-ink-soft">
-            Three focused tools — no clutter, no theory dumps. Just clear movement
-            rules and a safe place to practice them.
-          </p>
+  return <div className="home-page">
+    <Navbar />
+    <main id="main-content" tabIndex={-1}>
+      <section className="page-width home-hero">
+        <ScrollReveal className="hero-copy">
+          <p className="eyebrow"><span className="status-dot" /> A good place to start playing</p>
+          <h1 className="hero-heading">Your next<br />good move<br />starts here.</h1>
+          <p className="hero-description">Learn how each piece moves, build confidence on the board, and practice at your own pace. A better game begins with a little play.</p>
+          <Link to="/bot" className="btn-primary mt-8">Play the bot <ArrowUpRight size={20} /></Link>
+          <p className="hero-reassurance"><Check size={16} /> No account needed. No clock. Just chess.</p>
         </ScrollReveal>
+        <ScrollReveal delay={.15} className="hero-visual">
+          <div className="visual-label"><span className="eyebrow">Your practice space</span><span className="text-xs text-ink-soft">01 / The board</span></div>
+          <BoardPreview />
+          <div className="floating-note"><span className="note-glyph" aria-hidden="true">♞</span><div><strong>Small moves. Real progress.</strong><p>Every game teaches you something.</p></div></div>
+        </ScrollReveal>
+      </section>
+      <div className="page-width"><div className="proof-strip"><span>Less theory. More playing.</span><p><strong>6</strong> piece guides</p><p><strong>5</strong> bot levels</p><p><strong>1</strong> friend, a whole new game</p></div></div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+      <section className="page-width section-space" aria-labelledby="benefits-title">
+        <ScrollReveal className="section-intro"><div><p className="eyebrow">Learn it. Try it. Make it yours.</p><h2 id="benefits-title" className="section-heading mt-4">A little structure.<br />A lot of possibility.</h2></div><p>You don’t need a wall of chess theory.<br />You need a clear next step and a board to try it on.</p></ScrollReveal>
+        <div className="benefit-grid">
           {[
-            {
-              icon: Puzzle,
-              title: "Piece library",
-              desc: "Six cards — one per piece — each with a live board diagram of its legal moves and captures.",
-              to: "/training",
-              cta: "Open the library",
-            },
-            {
-              icon: Swords,
-              title: "Play the bot",
-              desc: "Put what you learned to the test. A real chess engine on the backend picks legal replies to your moves.",
-              to: "/bot",
-              cta: "Challenge the bot",
-            },
-            {
-              icon: GraduationCap,
-              title: "Learn at your pace",
-              desc: "Scroll-down reveals keep each lesson digestible — one concept per screen as you scroll.",
-              to: "/lobby",
-              cta: "See all modes",
-            },
-          ].map((feature, i) => (
-            <ScrollReveal key={feature.title} delay={i * 0.12}>
-              <Link
-                to={feature.to}
-                className="group flex h-full flex-col rounded-2xl border border-parchment bg-white p-7 shadow-[0_1px_2px_rgba(38,35,30,0.05)] transition-all duration-300 hover:-translate-y-1.5 hover:border-forest/30 hover:shadow-xl hover:shadow-forest/10"
-              >
-                <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-forest/10 text-forest transition-transform duration-300 group-hover:scale-110">
-                  <feature.icon size={22} />
-                </span>
-                <h3 className="font-display text-2xl font-semibold text-ink">{feature.title}</h3>
-                <p className="mt-2 flex-1 text-sm leading-relaxed text-ink-soft">{feature.desc}</p>
-                <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-forest transition-all group-hover:gap-3">
-                  {feature.cta} <ArrowRight size={15} />
-                </span>
-              </Link>
-            </ScrollReveal>
-          ))}
+            { Icon: BookOpen, n: "01", title: "See the move, not just the rule.", text: "Six visual piece guides turn movement rules into something you can actually picture.", to: "/training", cta: "Explore the pieces", glyph: "♞", label: "Understand the board" },
+            { Icon: Robot, n: "02", title: "Find your kind of challenge.", text: "From your first game to a tougher opponent, choose from five bot levels. Take your time.", to: "/bot", cta: "Play the bot", glyph: "♜", label: "Practice at your pace" },
+            { Icon: UsersThree, n: "03", title: "Make it a game for two.", text: "Send a friend an invite link. Pick your colors, choose a clock, and meet across the board.", to: "/lobby", cta: "Invite a friend", glyph: "♟", label: "Better together" },
+          ].map(({ Icon, n, title, text, to, cta, glyph, label }, i) => <ScrollReveal key={n} delay={i * .1}><article className="benefit-card"><div className={`benefit-art art-${i}`} aria-hidden="true"><span className="art-number">{n}</span><span className="art-piece">{glyph}</span><span className="art-caption"><Icon size={16} />{label}</span></div><div className="benefit-content"><h3>{title}</h3><p>{text}</p><Link to={to} className="text-link">{cta}<ArrowUpRight size={18} /></Link></div></article></ScrollReveal>)}
         </div>
       </section>
 
-      {/* ===== PIECE PREVIEW ===== */}
-      <section className="bg-forest-deep py-24 text-cream">
-        <div className="mx-auto max-w-6xl px-5">
-          <ScrollReveal className="mb-14 text-center">
-            <span className="text-xs font-semibold uppercase tracking-widest text-gold">
-              The lineup
-            </span>
-            <h2 className="mt-3 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-              Six pieces. Six personalities.
-            </h2>
-          </ScrollReveal>
+      <Tagline />
 
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            {PIECES.map((piece, i) => (
-              <ScrollReveal key={piece.type} delay={i * 0.07} y={24}>
-                <div className="group flex flex-col items-center rounded-2xl border border-cream/10 bg-cream/5 p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-gold/40 hover:bg-cream/10">
-                  <span
-                    className="flex h-14 w-14 items-center justify-center rounded-full text-4xl transition-transform duration-300 group-hover:scale-110"
-                    style={{ backgroundColor: `${piece.accent}30` }}
-                  >
-                    {piece.glyph}
-                  </span>
-                  <span className="mt-3 font-display text-lg font-semibold">{piece.name}</span>
-                  <span className="mt-1 text-[11px] leading-snug text-cream/60">{piece.tagline}</span>
-                </div>
-              </ScrollReveal>
-            ))}
-          </div>
-
-          <ScrollReveal delay={0.15} className="mt-12 text-center">
-            <Link
-              to="/training"
-              className="inline-flex items-center gap-2 rounded-full bg-gold px-8 py-3.5 text-sm font-semibold text-forest-deep shadow-lg transition-all hover:bg-cream active:scale-[0.98]"
-            >
-              Explore every piece <ArrowRight size={16} />
-            </Link>
-          </ScrollReveal>
-        </div>
+      <section className="page-width section-space" aria-labelledby="steps-title">
+        <ScrollReveal className="section-intro"><div><p className="eyebrow">From curious to confident</p><h2 id="steps-title" className="section-heading mt-4">Your first move is simple.</h2></div><Link to="/bot" className="text-link">Let’s play <ArrowRight size={18} /></Link></ScrollReveal>
+        <div className="steps-grid">{[
+          ["01", "Meet the pieces", "Learn what each piece can do. Start with a pawn, or jump straight to the knight."],
+          ["02", "Set your challenge", "Choose a bot level and your color. There’s no timer, so you can think things through."],
+          ["03", "Learn by playing", "Drag a piece to see its legal moves. Try an idea, watch the reply, and keep going."],
+        ].map(([n, title, text], i) => <ScrollReveal key={n} delay={i * .1}><article className="step-card"><span>{n}</span><h3>{title}</h3><p>{text}</p></article></ScrollReveal>)}</div>
       </section>
 
-      {/* ===== CTA ===== */}
-      <section className="mx-auto max-w-6xl px-5 py-24">
-        <ScrollReveal>
-          <div className="relative overflow-hidden rounded-3xl bg-forest px-8 py-16 text-center text-cream shadow-[0_30px_80px_-30px_rgba(35,70,58,0.6)] sm:px-16">
-            <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-gold/20 blur-2xl" />
-            <div className="pointer-events-none absolute -bottom-16 -right-16 h-56 w-56 rounded-full bg-terracotta/25 blur-2xl" />
-            <h2 className="relative font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-              Ready to make your first move?
-            </h2>
-            <p className="relative mx-auto mt-4 max-w-md text-cream/80">
-              Learn all six pieces in under ten minutes — then test yourself against
-              the bot in the lobby.
-            </p>
-            <Link
-              to="/lobby"
-              className="relative mt-8 inline-flex items-center gap-2 rounded-full bg-cream px-8 py-3.5 text-sm font-semibold text-forest-deep shadow-md transition-all hover:bg-gold active:scale-[0.98]"
-            >
-              Go to the lobby <ArrowRight size={16} />
-            </Link>
-          </div>
-        </ScrollReveal>
-      </section>
+      <section className="piece-section section-space" aria-labelledby="pieces-title"><div className="page-width piece-layout">
+        <ScrollReveal><p className="eyebrow">A closer look</p><h2 id="pieces-title" className="section-heading mt-4">Six pieces.<br />Endless possibilities.</h2><p className="mt-6 max-w-md text-ink-soft">The knight jumps. The bishop glides. Each piece has its own way of seeing the board. Get to know them, one at a time.</p><div className="piece-lineup" aria-label="The six chess pieces">{PIECES.map(piece => <span key={piece.type} title={piece.name} aria-label={piece.name}>{piece.glyph}</span>)}</div><Link className="text-link" to="/training">Open the piece library <ArrowUpRight size={18} /></Link></ScrollReveal>
+        <ScrollReveal delay={.1} className="lesson-preview"><div><p className="eyebrow">A small lesson</p><h3>The knight takes a different path.</h3><p>Two squares one way, one square across.<br />And yes, it can jump over other pieces.</p></div><div className="lesson-board"><BoardDiagram piece={PIECES[1]} /></div><span className="lesson-caption"><Check size={16} /> Real movement diagrams from the piece library</span></ScrollReveal>
+      </div></section>
 
-      <Footer />
-    </div>
-  );
+      <section className="page-width section-space faq-layout" aria-labelledby="faq-title"><ScrollReveal><p className="eyebrow">Before you take a seat</p><h2 id="faq-title" className="section-heading mt-4">Good questions.<br />Clear answers.</h2><p className="mt-6 text-ink-soft">A few things to know before your first game.</p></ScrollReveal><div className="faq-list">{faqs.map(([question, answer]) => <details key={question}><summary>{question}<Plus size={18} /></summary><p>{answer}</p></details>)}</div></section>
+
+      <section className="page-width pb-20"><ScrollReveal className="final-cta"><div><p className="eyebrow">The board is ready when you are</p><h2 className="section-heading mt-4">Make a move.<br />See where it takes you.</h2><p className="mt-6">No account needed for bot play. Start again whenever you like.</p><Link to="/bot" className="btn-primary mt-8">Play the bot <ArrowUpRight size={20} /></Link></div><span aria-hidden="true" className="cta-piece">♞</span></ScrollReveal></section>
+    </main>
+    <Footer />
+  </div>;
 }
