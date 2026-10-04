@@ -49,13 +49,12 @@ services:
       # - key: ADMIN_USERNAME
       #   value: ARISE
 
-  # ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
   # 2) Client — static site (React + Vite + the WASM engine)
   # ---------------------------------------------------------------------------
   - type: web
     name: chessify-web
     runtime: static
-    plan: free
     rootDir: client
     buildCommand: npm install && npm run build
     staticPublishPath: dist
