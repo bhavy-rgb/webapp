@@ -1,0 +1,80 @@
+# Render Blueprint — Chessify (bhavy-rgb/webapp)
+# Put this file at the ROOT of the repo (next to package.json), commit, push.
+# Then in Render: New + > Blueprint > pick bhavy-rgb/webapp.
+#
+# What this sets up
+#   1) chessify-api — Node/Express API, persistence via MongoDB (Atlas)
+#   2) chessify-web — static React client, which serves the Rust/WASM engine
+#
+# About the Rust engine (important):
+#   The engine is a WebAssembly module that is ALREADY COMMITTED at
+#   client/src/engine/pkg/ (chessify_bot_bg.wasm, ~90 KB). It runs in the
+#   visitor's browser inside a Web Worker — NOT on Render. Render only has to
+#   serve the file, which the static site does from its CDN. So no Rust
+#   toolchain is needed at build time and deploys stay fast.
+#
+# About the database (important):
+#   Render does not host MongoDB. Use a free MongoDB Atlas cluster and put its
+#   connection string in the MONGODB_URI variable below (set it in the Render
+#   dashboard — it is marked `sync: false` so it is never stored in this file).
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1) API — Express server, MongoDB persistence
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: chessify-api
+    runtime: node
+    plan: free
+    rootDir: server
+    # --include=dev is required because `tsx` (used by `npm start`) is a devDependency
+    buildCommand: npm install --include=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20.11.1"
+      - key: JWT_SECRET
+        generateValue: true      # Render generates a long random secret
+      # Paste your MongoDB Atlas connection string in the Render dashboard.
+      - key: MONGODB_URI
+        sync: false
+      # IMPORTANT: the server uses MONGODB_DB as the database name and IGNORES
+      # the one inside the URI (defaults to "chessify" if unset). If you migrated
+      # your data into a differently named database (e.g. "chassisDb"), uncomment
+      # this and set it to that exact name, or the app will look in an empty DB.
+      # - key: MONGODB_DB
+      #   value: chassisDb
+      # Optional: the first account signed up with this username becomes admin.
+      # - key: ADMIN_USERNAME
+      #   value: ARISE
+
+  # ---------------------------------------------------------------------------
+  # 2) Client — static site (React + Vite + the WASM engine)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: chessify-web
+    runtime: static
+    plan: free
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      # Forward API calls to the backend. Keep this ABOVE the catch-all.
+      - type: rewrite
+        source: /api/*
+        destination: https://chessify-api.onrender.com/api/:splat
+      # SPA catch-all so /lobby, /play/<CODE> etc. survive a refresh.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # Vite emits content-hashed filenames, so they are safe to cache forever.
+      # This covers the bundled WASM engine too — meaning the browser downloads
+      # it once and then loads it instantly.
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*.wasm
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
