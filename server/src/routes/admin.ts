@@ -15,16 +15,18 @@
  *   GET    /api/admin/console          — captured server console output
  *
  * Every mutating admin action is itself audit-logged.
+ *
+ * Persistence goes through stores/index.js (Mongo when MONGODB_URI is set).
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Router, type Response } from "express";
-import { auditLog, requestIp } from "../auditLog.js";
-import { botGameStore, type BotGame } from "../botGameStore.js";
+import { requestIp } from "../auditLog.js";
+import { type BotGame } from "../botGameStore.js";
 import { getConsoleLogs } from "../consoleLogs.js";
-import { jsonUserStore, toPublicUser } from "../db.js";
-import { gameStore } from "../gameStore.js";
+import { toPublicUser } from "../db.js";
+import { userStore, gameStore, botGameStore, auditLog } from "../stores/index.js";
 import type { AuthRequest } from "../middleware/auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,14 +34,14 @@ const DATA_DIR = path.join(__dirname, "..", "..", "data");
 
 const router = Router();
 
-function adminAudit(
+async function adminAudit(
   req: AuthRequest,
   action: string,
   target: string | null,
   ok: boolean,
   meta?: Record<string, unknown>
 ) {
-  auditLog.record({
+  await auditLog.record({
     actorId: req.user!.id,
     actorName: req.user!.username,
     action,
@@ -54,9 +56,9 @@ function adminAudit(
 // GET /api/admin/stats
 // ---------------------------------------------------------------------------
 router.get("/stats", async (_req: AuthRequest, res: Response) => {
-  const users = await jsonUserStore.listAll();
-  const botGames = botGameStore.listAll();
-  const games1v1 = gameStore.listAll();
+  const users = await userStore.listAll();
+  const botGames = await botGameStore.listAll();
+  const games1v1 = await gameStore.listAll();
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -85,7 +87,7 @@ router.get("/stats", async (_req: AuthRequest, res: Response) => {
     resultDistribution: dist,
     avgMovesPerBotGame: botGames.length ? Math.round((totalMoves / botGames.length) * 10) / 10 : 0,
     difficultyDistribution: difficulty,
-    auditEntries: auditLog.count(),
+    auditEntries: await auditLog.count(),
   });
 });
 
@@ -98,12 +100,12 @@ router.get("/users", async (req: AuthRequest, res: Response) => {
   const search =
     typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
 
-  let users = await jsonUserStore.listAll();
+  let users = await userStore.listAll();
   if (search) users = users.filter((u) => u.username.toLowerCase().includes(search));
 
   const total = users.length;
   const start = (page - 1) * limit;
-  const botGames = botGameStore.listAll();
+  const botGames = await botGameStore.listAll();
   const pageUsers = users.slice(start, start + limit).map((u) => ({
     ...toPublicUser(u),
     botGameCount: botGames.filter((g) => g.userId === u.id).length,
@@ -124,8 +126,8 @@ router.patch("/users/:id", async (req: AuthRequest, res: Response) => {
   if (id === req.user!.id && !isAdmin) {
     return res.status(400).json({ message: "You can't remove admin from yourself" });
   }
-  const updated = await jsonUserStore.setAdmin(id, isAdmin);
-  adminAudit(req, "admin.user.setAdmin", id, !!updated, { isAdmin });
+  const updated = await userStore.setAdmin(id, isAdmin);
+  await adminAudit(req, "admin.user.setAdmin", id, !!updated, { isAdmin });
   if (!updated) return res.status(404).json({ message: "User not found" });
   res.json({ user: toPublicUser(updated) });
 });
@@ -138,8 +140,8 @@ router.delete("/users/:id", async (req: AuthRequest, res: Response) => {
   if (id === req.user!.id) {
     return res.status(400).json({ message: "You can't delete yourself" });
   }
-  const ok = await jsonUserStore.remove(id);
-  adminAudit(req, "admin.user.delete", id, ok);
+  const ok = await userStore.remove(id);
+  await adminAudit(req, "admin.user.delete", id, ok);
   if (!ok) return res.status(404).json({ message: "User not found" });
   res.json({ ok: true });
 });
@@ -147,9 +149,9 @@ router.delete("/users/:id", async (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/admin/bot-games?page&limit&playerId&result&difficulty&startDate&endDate
 // ---------------------------------------------------------------------------
-router.get("/bot-games", (req: AuthRequest, res: Response) => {
+router.get("/bot-games", async (req: AuthRequest, res: Response) => {
   const q = req.query;
-  const out = botGameStore.list({
+  const out = await botGameStore.list({
     page: parseInt(String(q.page)) || 1,
     limit: parseInt(String(q.limit)) || 20,
     playerId: typeof q.playerId === "string" ? q.playerId : undefined,
@@ -164,8 +166,8 @@ router.get("/bot-games", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/admin/bot-games/:id
 // ---------------------------------------------------------------------------
-router.get("/bot-games/:id", (req: AuthRequest, res: Response) => {
-  const game = botGameStore.find(req.params.id);
+router.get("/bot-games/:id", async (req: AuthRequest, res: Response) => {
+  const game = await botGameStore.find(req.params.id);
   if (!game) return res.status(404).json({ message: "Bot game not found" });
   res.json(game);
 });
@@ -173,10 +175,10 @@ router.get("/bot-games/:id", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/admin/1v1-games?page=1&limit=20
 // ---------------------------------------------------------------------------
-router.get("/1v1-games", (req: AuthRequest, res: Response) => {
+router.get("/1v1-games", async (req: AuthRequest, res: Response) => {
   const page = Math.max(1, parseInt(String(req.query.page)) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit)) || 20));
-  const all = gameStore.listAll();
+  const all = await gameStore.listAll();
   const total = all.length;
   const start = (page - 1) * limit;
   const games = [...all]
@@ -199,8 +201,8 @@ router.get("/1v1-games", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // POST /api/admin/training-set — flatten eval histories into training data
 // ---------------------------------------------------------------------------
-router.post("/training-set", (req: AuthRequest, res: Response) => {
-  const games = botGameStore.listAll();
+router.post("/training-set", async (req: AuthRequest, res: Response) => {
+  const games = await botGameStore.listAll();
   const positions: Array<{
     fen: string;
     evalCp: number;
@@ -225,7 +227,7 @@ router.post("/training-set", (req: AuthRequest, res: Response) => {
     JSON.stringify({ generatedAt: new Date().toISOString(), positions }, null, 2),
     "utf-8"
   );
-  adminAudit(req, "admin.trainingset.generate", null, true, { positions: positions.length });
+  await adminAudit(req, "admin.trainingset.generate", null, true, { positions: positions.length });
   res.json({ positions: positions.length, file: "training_set.json" });
 });
 
@@ -259,10 +261,10 @@ function toPgn(g: BotGame): string {
   return `${headers}\n\n${moveText} ${pgnResult}\n`;
 }
 
-router.get("/export", (req: AuthRequest, res: Response) => {
+router.get("/export", async (req: AuthRequest, res: Response) => {
   const format = req.query.format === "pgn" ? "pgn" : "json";
-  const games = botGameStore.listAll();
-  adminAudit(req, "admin.export", null, true, { format, count: games.length });
+  const games = await botGameStore.listAll();
+  await adminAudit(req, "admin.export", null, true, { format, count: games.length });
 
   if (format === "pgn") {
     res.setHeader("Content-Type", "application/x-chess-pgn");
@@ -277,11 +279,11 @@ router.get("/export", (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/admin/audit — the audit trail (filterable)
 // ---------------------------------------------------------------------------
-router.get("/audit", (req: AuthRequest, res: Response) => {
+router.get("/audit", async (req: AuthRequest, res: Response) => {
   const limit = Math.min(500, parseInt(String(req.query.limit)) || 200);
   const action = typeof req.query.action === "string" ? req.query.action : undefined;
   const actorId = typeof req.query.actorId === "string" ? req.query.actorId : undefined;
-  res.json({ entries: auditLog.list({ limit, action, actorId }) });
+  res.json({ entries: await auditLog.list({ limit, action, actorId }) });
 });
 
 // ---------------------------------------------------------------------------

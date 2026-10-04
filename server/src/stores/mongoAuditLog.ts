@@ -41,12 +41,11 @@ export const mongoAuditLog = {
     const c = await col();
     await c.insertOne(entry);
 
-    // Trim old entries if over the limit (lightweight — runs only when needed)
+    // Trim old entries if over the limit (lightweight — runs only when needed).
     const count = await c.countDocuments();
     if (count > MAX_ENTRIES) {
       const excess = count - MAX_ENTRIES;
-      await c.deleteMany({}, {}) // can't easily sort+delete in one call, so:
-      // Delete oldest by ts
+      // Delete the oldest entries by ts.
       const oldest = await c.find().sort({ ts: 1 }).limit(excess).project({ _id: 1 }).toArray();
       if (oldest.length) {
         await c.deleteMany({ _id: { $in: oldest.map((d) => d._id) } });

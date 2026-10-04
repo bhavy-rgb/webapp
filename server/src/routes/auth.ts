@@ -1,11 +1,9 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import {
-  jsonUserStore,
-  toPublicUser,
-  type UserStore,
-} from "../db.js";
+import { toPublicUser, type UserStore } from "../db.js";
+import { auditLog, userStore } from "../stores/index.js";
+import { requestIp } from "../auditLog.js";
 import {
   clearAuthCookie,
   requireAuth,
@@ -13,7 +11,6 @@ import {
   signToken,
   type AuthRequest,
 } from "../middleware/auth.js";
-import { auditLog, requestIp } from "../auditLog.js";
 
 const router = Router();
 
@@ -29,7 +26,7 @@ const authLimiter = rateLimit({
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function pickStore(): UserStore {
-  return jsonUserStore;
+  return userStore;
 }
 
 router.post("/signup", authLimiter, async (req, res) => {
@@ -75,7 +72,7 @@ router.post("/signup", authLimiter, async (req, res) => {
     });
 
     setAuthCookie(res, signToken(user));
-    auditLog.record({
+    await auditLog.record({
       actorId: user.id,
       actorName: user.username,
       action: "auth.signup",
@@ -103,7 +100,7 @@ router.post("/login", authLimiter, async (req, res) => {
   const user = byUsername ?? byEmail;
 
   if (!user) {
-    auditLog.record({
+    await auditLog.record({
       actorId: "anonymous",
       actorName: identifier.trim().slice(0, 40),
       action: "auth.login",
@@ -117,7 +114,7 @@ router.post("/login", authLimiter, async (req, res) => {
 
   try {
     const ok = await bcrypt.compare(password, user.passwordHash);
-    auditLog.record({
+    await auditLog.record({
       actorId: user.id,
       actorName: user.username,
       action: "auth.login",

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { jsonUserStore, type User } from "../db.js";
+import type { User } from "../db.js";
+import { userStore } from "../stores/index.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
@@ -47,7 +48,7 @@ function extractToken(req: Request): string | null {
 async function verifyUser(token: string): Promise<User | null> {
   try {
     const payload = jwt.verify(token, JWT_SECRET) as { sub: string };
-    return (await jsonUserStore.findById(payload.sub)) ?? null;
+    return (await userStore.findById(payload.sub)) ?? null;
   } catch {
     return null;
   }

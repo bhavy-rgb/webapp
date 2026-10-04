@@ -8,10 +8,13 @@
  * Uses identifyPlayer so both JWT users and anonymous guests can submit.
  * Validation is defensive: the payload comes from the client, so bounds
  * are enforced (move count, eval history size, string lengths).
+ *
+ * Persistence goes through stores/index.js (Mongo when MONGODB_URI is set).
  */
 import { Router, type Response } from "express";
-import { auditLog, requestIp } from "../auditLog.js";
-import { botGameStore, type BotGameEvalEntry, type BotGameMove } from "../botGameStore.js";
+import { requestIp } from "../auditLog.js";
+import { botGameStore, auditLog } from "../stores/index.js";
+import { type BotGameEvalEntry, type BotGameMove } from "../botGameStore.js";
 import { identifyPlayer, type PlayerRequest } from "../middleware/auth.js";
 
 const router = Router();
@@ -71,7 +74,7 @@ const RESULT_RE = /^(checkmate:[wb]|resign:[wb]|draw:(stalemate|insufficient|rep
 // ---------------------------------------------------------------------------
 // POST /api/bot-games — submit a game (also accepts sendBeacon text/plain)
 // ---------------------------------------------------------------------------
-router.post("/", (req: PlayerRequest, res: Response) => {
+router.post("/", async (req: PlayerRequest, res: Response) => {
   // sendBeacon posts JSON with a text/plain content type — express.json()
   // won't parse it, so req.body arrives as a raw string. Handle both.
   let body: Record<string, unknown>;
@@ -103,7 +106,7 @@ router.post("/", (req: PlayerRequest, res: Response) => {
   if (!result) return res.status(400).json({ message: "Invalid result" });
 
   const isGuest = req.playerId!.startsWith("guest:");
-  const game = botGameStore.create({
+  const game = await botGameStore.create({
     userId: isGuest ? null : req.playerId!,
     guestId: isGuest ? req.playerId! : null,
     playerName: req.playerName!,
@@ -116,7 +119,7 @@ router.post("/", (req: PlayerRequest, res: Response) => {
     playedAt: new Date().toISOString(),
   });
 
-  auditLog.record({
+  await auditLog.record({
     actorId: req.playerId!,
     actorName: req.playerName!,
     action: "botgame.submit",
@@ -132,8 +135,8 @@ router.post("/", (req: PlayerRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/bot-games — your own games, paginated
 // ---------------------------------------------------------------------------
-router.get("/", (req: PlayerRequest, res: Response) => {
-  const { games, total, page, limit } = botGameStore.list({
+router.get("/", async (req: PlayerRequest, res: Response) => {
+  const { games, total, page, limit } = await botGameStore.list({
     playerId: req.playerId!,
     page: parseInt(String(req.query.page)) || 1,
     limit: parseInt(String(req.query.limit)) || 20,
@@ -146,8 +149,8 @@ router.get("/", (req: PlayerRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/bot-games/:id — detail (only your own game)
 // ---------------------------------------------------------------------------
-router.get("/:id", (req: PlayerRequest, res: Response) => {
-  const game = botGameStore.find(req.params.id);
+router.get("/:id", async (req: PlayerRequest, res: Response) => {
+  const game = await botGameStore.find(req.params.id);
   if (!game || (game.userId !== req.playerId && game.guestId !== req.playerId)) {
     return res.status(404).json({ message: "Game not found" });
   }
